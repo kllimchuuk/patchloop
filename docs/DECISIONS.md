@@ -54,3 +54,6 @@ Každý záznam: dátum, rozhodnutie, prečo, čo sa zmenilo. Rozhodnutia robí 
 19. **Kontextové okno: `llm.num_ctx = 16384` v konfigurácii.**
     - *Prečo:* Ollama predvolene používa 4096 tokenov, čo nestačí na kód súborov, chyby a históriu pokusov.
     - *Zmenilo sa:* `LlmConfig.num_ctx`, odovzdáva sa v každej požiadavke.
+20. **«Thinking» modelu je predvolene vypnutý (`llm.thinking: false`).**
+    - *Prečo:* orientačné meranie na dvoch malých chybách (po 3 behy, model `qwen3.5:9b-q4_K_M`, štruktúrovaná odpoveď): bez thinking 3,2 s a 12,3 s, s thinking 12,8 s a 15,1 s; správnosť rovnaká (3/3 v oboch režimoch). Cez LiteLLM: 5,3 s proti 13,6 s. Na malých úlohách thinking nepridáva kvalitu, len čas.
+    - *Zmenilo sa:* `LlmConfig.thinking`, v požiadavke `reasoning_effort="none"` (zapnuté: `"low"`). Pri ťažších chybách sa môže oplatiť zapnúť thinking pre Programátora; vrátime sa k tomu pri testovaní na vlastných projektoch.

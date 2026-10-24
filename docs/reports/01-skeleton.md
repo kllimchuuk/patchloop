@@ -28,3 +28,8 @@ Potrebné rozhodnutie: (a) ponechať llm.timeout_s = 120 s; pri úlohách s viac
 Na Apple Silicon príkaz `ollama pull qwen3.5:9b` stiahne variant MLX (`nvfp4`), ktorý odpovedá
 `structured output is unavailable` aj na najjednoduchšiu požiadavku `format: json`. Variant
 `qwen3.5:9b-q4_K_M` (GGUF) so schémou JSON funguje. Záver je zapísaný v `docs/DECISIONS.md`, záznam 18.
+
+## Dodatok: rozhodnutie o «thinking»
+
+Otázka (a) zo správy je vyriešená: «thinking» je predvolene vypnutý (`llm.thinking: false`, rozhodnutie 20 v
+`docs/DECISIONS.md`). Na dvoch malých chybách bol výsledok rovnako správny (3/3), ale bez thinking 3–4× rýchlejší.

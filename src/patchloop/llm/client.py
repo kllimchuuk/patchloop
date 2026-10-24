@@ -29,6 +29,7 @@ class LLMClient(Protocol):
 def _default_completion(**kwargs: Any) -> str:
     import litellm  # imported lazily: it is slow to import and not needed in most tests
 
+    litellm.suppress_debug_info = True
     response = litellm.completion(**kwargs)
     return response.choices[0].message.content or ""
 
@@ -82,6 +83,7 @@ class LiteLLMClient:
                 timeout=self.config.timeout_s,
                 temperature=0,
                 num_ctx=self.config.num_ctx,
+                reasoning_effort="low" if self.config.thinking else "none",
                 response_format={
                     "type": "json_schema",
                     "json_schema": {"name": schema.__name__, "schema": json_schema, "strict": True},

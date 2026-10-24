@@ -35,6 +35,15 @@ def test_context_window_is_passed_to_the_model():
     assert calls[0]["num_ctx"] == LlmConfig().num_ctx
 
 
+def test_thinking_is_off_by_default_and_can_be_enabled():
+    client, calls = _client([VALID])
+    client.complete(MESSAGES, Patch)
+    assert calls[0]["reasoning_effort"] == "none"
+    thinking = LiteLLMClient(LlmConfig(thinking=True), None, lambda **kw: calls.append(kw) or VALID)
+    thinking.complete(MESSAGES, Patch)
+    assert calls[-1]["reasoning_effort"] == "low"
+
+
 def test_invalid_answer_is_retried_once_with_the_error():
     client, calls = _client(['{"files": 1}', VALID])
     assert client.complete(MESSAGES, Patch).explanation == "fixed"

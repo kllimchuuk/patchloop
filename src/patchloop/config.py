@@ -20,6 +20,7 @@ class LlmConfig(_Section):
     base_url: str = "http://localhost:11434"
     timeout_s: float = Field(120.0, gt=0)
     num_ctx: int = Field(16384, ge=2048)  # Ollama default (4096) is too small
+    thinking: bool = False  # the model's reasoning mode: slower, not better on small tasks
 
 
 class Config(_Section):
