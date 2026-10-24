@@ -26,3 +26,10 @@ htmlcov/
 
 # OS
 .DS_Store
+
+# Run artifacts
+cache/
+results/
+
+# Local original plan (not published)
+/PLAN.md
