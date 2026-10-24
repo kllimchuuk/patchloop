@@ -4,12 +4,12 @@ Read `CLAUDE.md` and `docs/SPEC.md` first (sections 4, 5, 12, 13, 14). This sess
 Ask the user only when blocked (installs, permissions, decisions with consequences). Do not go beyond this session.
 
 ## Step 0. Machine inventory (done 24.10.2026, keep for the report)
-macOS 26.5, Apple M4, 16 GB RAM, 156 GB free, Python 3.11.9 in `.venv`, Docker 28.5.1 works, `uv` present (not used — decision 13), **Ollama not installed**.
+macOS 26.5, Apple M4, 16 GB RAM, 156 GB free, Python 3.12 in `.venv` (managed by `uv`, decision 17), Docker 28.5.1 works, **Ollama not installed**.
 
 ## Step 1. Packaging
-- `pyproject.toml`: src-layout, package `patchloop`, `requires-python = ">=3.11"`, `[project.scripts] patchloop = "patchloop.cli:main"`.
+- `pyproject.toml`: src-layout, package `patchloop`, `requires-python = ">=3.12"`, `[project.scripts] patchloop = "patchloop.cli:main"`.
 - Runtime dependencies for this session only: `pydantic`, `litellm`, `typer`, `rich`, `pyyaml`. Dev: `pytest`, `ruff`. Other libraries from SPEC §13 (langgraph, docker, sqlalchemy…) are added in the step that needs them.
-- Install with `.venv/bin/pip install -e ".[dev]"`. Pin nothing yet; record resulting versions in the report.
+- Install with `uv sync` (dev tools in `[dependency-groups]`). Pin nothing yet; record resulting versions in the report.
 - `ruff` configuration in `pyproject.toml` (line length 100, import sorting).
 - `.env.example` with empty values (e.g. `OLLAMA_BASE_URL`), already ignored `.env` stays out of git.
 - Commit after the step is the user's job; stop and list the files to stage.

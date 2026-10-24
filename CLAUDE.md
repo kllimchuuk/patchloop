@@ -31,7 +31,7 @@ Input: project path + optional bug description → copy into a no-network Docker
 ```
 
 ## Stack and dependencies
-Python 3.11 (`.venv`, dependencies managed with `pip` and `pyproject.toml`), LangGraph, Pydantic, LiteLLM, Ollama, docker-py, SQLAlchemy 2 + Alembic + PostgreSQL (pgvector), Typer + Rich, tree-sitter. Dev: pytest, ruff. List is in SPEC §13; anything else needs a decision first.
+Python 3.12 (`.venv`, dependencies managed with `uv`: `pyproject.toml` + `uv.lock`), LangGraph, Pydantic, LiteLLM, Ollama, docker-py, SQLAlchemy 2 + Alembic + PostgreSQL (pgvector), Typer + Rich, tree-sitter. Dev: pytest, ruff. List is in SPEC §13; anything else needs a decision first.
 
 ## Code
 - src-layout under `src/patchloop/`; structure in SPEC §13.
@@ -41,7 +41,7 @@ Python 3.11 (`.venv`, dependencies managed with `pip` and `pyproject.toml`), Lan
 - Every loop has a stop condition (iteration limit, stagnation check, timeout). See SPEC §8.
 - A generated test must fail on the original code before the fix, and the Tester never sees the fix.
 - No silent fallbacks: a missing model, image or Docker is an error with a clear message.
-- Tests (pytest) must not use a real LLM or the network; use a fake LLM client. Run `ruff check .` and `pytest -q` before saying work is done.
+- Tests (pytest) must not use a real LLM or the network; use a fake LLM client. Run `uv run ruff check .` and `uv run pytest -q` before saying work is done.
 
 ## Git
 - The user writes their own commit messages. Stage files if asked, but do not commit.

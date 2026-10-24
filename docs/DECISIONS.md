@@ -37,7 +37,7 @@ Každý záznam: dátum, rozhodnutie, prečo, čo sa zmenilo. Rozhodnutia robí 
 10. **Jazyk textov:** kód, identifikátory, komentáre a commity po anglicky; dokumentácia v `docs/` a `PLAN.md` po slovensky.
 11. **Knižnice schválené s vedúcim:** LangGraph, Pydantic, LiteLLM, Ollama, docker-py, SQLAlchemy 2, Alembic, Typer, Rich, tree-sitter.
 12. **Výber modelov (qwen3.5:9b, qwen2.5-coder:14b, gemma4:12b, záloha devstral:24b)** sa overí počas implementácie: dostupnosť v Ollama a pamäťové nároky (16 GB).
-13. **Prostredie: Python 3.11, správca závislostí `pip` (s `venv`).**
+13. **Prostredie: Python 3.11, správca závislostí `pip` (s `venv`).** *Nahradené rozhodnutím 17.*
     - *Prečo:* autor už používa Python 3.11 v prostredí `.venv`; netreba pridávať ďalší nástroj.
     - *Zmenilo sa:* SPEC §2, §13; v `PLAN.md` namiesto «Python 3.10+» platí 3.11.
 14. **Jazyk promptov a vysvetlení systému: angličtina, jazyk vysvetlení konfigurovateľný.**
@@ -45,3 +45,6 @@ Každý záznam: dátum, rozhodnutie, prečo, čo sa zmenilo. Rozhodnutia robí 
     - *Zmenilo sa:* SPEC §2; v `patchloop.yml` pribudne kľúč `language`.
 15. **Organizácia práce podľa vzoru Sentinel:** úlohy na sedenia v `docs/prompts/NN-*.md` (po anglicky), správy po sedeniach v `docs/reports/NN-*.md` vo fixnom formáte, žurnál rozhodnutí tu. Pred zverejnením repozitára sa servisné súbory (`CLAUDE.md`, `docs/prompts/`) môžu odstrániť samostatným commitom; v histórii zostanú.
 16. **Referenčný projekt:** na organizáciu práce (SPEC, žurnál rozhodnutí, správy po etapách, štruktúra CLAUDE.md) sa inšpirujeme verejným repozitárom Sentinel; jeho obmedzenia knižníc sa na nás nevzťahujú.
+17. **Prostredie: Python 3.12, správca závislostí `uv` (nahrádza rozhodnutie 13).**
+    - *Prečo:* `uv.lock` pripína presné verzie knižníc (LangGraph, LiteLLM a ďalšie sa často menia), rovnaké prostredie na každom stroji a v Dockeri; `uv sync` je rýchly a jedným príkazom vytvorí prostredie. Rovnaký prístup má referenčný projekt. Python 3.12 podporujú všetky plánované knižnice.
+    - *Zmenilo sa:* `requires-python >= 3.12`, `[dependency-groups] dev` v `pyproject.toml`, súbory `uv.lock` a `.python-version` v git, SPEC §2 a §13, `CLAUDE.md`, `README.md`. Príkazy: `uv sync`, `uv run pytest -q`, `uv run patchloop doctor`.

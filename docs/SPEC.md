@@ -39,7 +39,7 @@ Typ práce: semestrálny projekt (dva semestre). Výskumná časť sa nerobí; d
 | Rozhranie | Terminál (Typer + Rich) naživo + HTML správa po behu |
 | Dáta | SQLAlchemy 2 + PostgreSQL (docker compose), Alembic; pgvector pre RAG |
 | Jazyky textov | Kód, identifikátory, komentáre, commity: angličtina. Dokumentácia (`PLAN.md`, `docs/`): slovenčina |
-| Prostredie | Python 3.11, pip + venv |
+| Prostredie | Python 3.12, správca závislostí uv (`uv sync`, `uv.lock`) |
 | Jazyk výstupov systému | Prompty a vysvetlenia opráv po anglicky; jazyk vysvetlení je konfigurovateľný (`patchloop.yml`, kľúč `language`) |
 | Knižnice | LangGraph, Pydantic, LiteLLM, Ollama, docker-py, SQLAlchemy, Alembic, Typer, Rich, tree-sitter (schválené s vedúcim) |
 
@@ -263,7 +263,7 @@ tests/
 docs/
 ```
 
-**Prostredie:** Python 3.11, `pip` + `venv` (`.venv`), závislosti v `pyproject.toml` (voliteľne `requirements.txt` pre pripnuté verzie).
+**Prostredie:** Python 3.12, správca závislostí `uv` (`.venv`, `uv sync`, `uv run`), závislosti v `pyproject.toml`, presné verzie v `uv.lock` (je v git).
 
 **Závislosti (runtime):** `langgraph`, `pydantic`, `litellm`, `docker`, `sqlalchemy`, `alembic`, `psycopg`, `pgvector`, `typer`, `rich`, `tree-sitter` s gramatikou Pythonu, `pyyaml`. **Dev:** `pytest`, `ruff`. Nová závislosť mimo zoznamu = najprv rozhodnutie.
 
