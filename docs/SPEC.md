@@ -28,7 +28,7 @@ Typ práce: semestrálny projekt (dva semestre). Výskumná časť sa nerobí; d
 | Typ práce | Semestrálny projekt na dva semestre, bez výskumnej časti |
 | Jazyk | Implementácia a overenie len pre Python (Django, FastAPI); architektúra jazykovo nezávislá cez profil jazyka. *Čaká na odsúhlasenie s vedúcim* |
 | Agenti | Programátor, Tester, Recenzent; nevolajú sa navzájom, pracujú so spoločným stavom, riadenie odovzdáva graf (LangGraph) |
-| Model | Lokálny, cez Ollama a LiteLLM; výber po testoch na vlastných projektoch |
+| Model | Lokálny, cez Ollama a LiteLLM; varianty GGUF (nie MLX, tie nepodporujú štruktúrovaný výstup), `num_ctx` v konfigurácii; výber po testoch na vlastných projektoch |
 | Pieskovisko | Jednorazový Docker kontajner bez siete, s limitmi; závislosti v obraze pripravenom vopred |
 | Konfigurácia projektu | `patchloop.yml` + automatická detekcia (profil Python) |
 | Vstup | CLI: cesta k projektu + voliteľný popis chyby |
@@ -218,6 +218,7 @@ CLI (Typer + Rich), kroky agentov naživo:
 patchloop fix ./projekt [--issue "popis" | --issue-file chyba.md] [--config patchloop.yml]
 patchloop apply <run_id>        # vytvorí vetvu git s opravou
 patchloop runs [show <run_id>]  # história behov
+patchloop check                 # kontrola prostredia: Python, Docker, Ollama, model
 patchloop report <run_id>       # HTML správa
 ```
 

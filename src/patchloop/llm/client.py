@@ -81,6 +81,7 @@ class LiteLLMClient:
                 api_base=self.config.base_url,
                 timeout=self.config.timeout_s,
                 temperature=0,
+                num_ctx=self.config.num_ctx,
                 response_format={
                     "type": "json_schema",
                     "json_schema": {"name": schema.__name__, "schema": json_schema, "strict": True},

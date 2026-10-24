@@ -8,7 +8,7 @@ from rich.console import Console
 
 from patchloop import __version__
 from patchloop.config import ConfigError, load_config
-from patchloop.doctor import run_checks
+from patchloop.environment import run_checks
 
 app = typer.Typer(help="Fix bugs in Python projects with a multi-agent system on a local LLM.")
 console = Console()
@@ -30,7 +30,7 @@ def root(
 
 
 @app.command()
-def doctor(
+def check(
     config: Annotated[Path | None, typer.Option("--config", help="Path to patchloop.yml.")] = None,
 ) -> None:
     """Check Python, Docker, Ollama and the configured model."""

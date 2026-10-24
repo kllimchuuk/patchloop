@@ -15,19 +15,20 @@ Input: project path + optional bug description → copy into a no-network Docker
 ## How we work
 - Chat with the user in Ukrainian. Docs (`docs/`, `PLAN.md`) are in Slovak. Code, identifiers, comments and commit messages are in English.
 - Small steps. Follow the order in SPEC §14.
-- If something in SPEC does not work in practice, do not work around it silently: stop and raise it as "Потрібне рішення" in the report.
+- Create only the files that the current session prompt or SPEC asks for. Do not add extras (README, scripts, examples, extra config) on your own initiative; propose them first.
+- If something in SPEC does not work in practice, do not work around it silently: stop and raise it as "Potrebné rozhodnutie" in the report.
 - Any new dependency, library or architecture change goes through a decision first, then `docs/DECISIONS.md`.
-- Session tasks live in `docs/prompts/NN-*.md` (English); reports in `docs/reports/NN-*.md`. Read the current prompt before starting a session and do only its steps.
+- Session tasks live in `docs/prompts/NN-*.md` (English); reports in `docs/reports/NN-*.md` (Slovak, like the other docs). Read the current prompt before starting a session and do only its steps.
 - Before the repository is shown publicly, service files (`CLAUDE.md`, `docs/prompts/`) can be removed in a separate commit; they stay in git history.
 - At the end of a work session or when blocked, give a short report in this format (numbers only if measured):
 
 ```
-ЗВІТ <дата> — <етап>
-Зроблено: …
-Цифри: … (лише виміряне)
-Відхилення від SPEC: … | немає
-Потрібне рішення: … | немає
-Далі: …
+ZVIT <dátum> — <etapa>
+Hotovo: …
+Čísla: … (len zmerané)
+Odchýlky od SPEC: … | žiadne
+Potrebné rozhodnutie: … | žiadne
+Ďalej: …
 ```
 
 ## Stack and dependencies

@@ -29,6 +29,12 @@ def test_valid_answer_is_parsed_and_schema_is_sent():
     assert calls[0]["response_format"]["json_schema"]["schema"]["title"] == "Patch"
 
 
+def test_context_window_is_passed_to_the_model():
+    client, calls = _client([VALID])
+    client.complete(MESSAGES, Patch)
+    assert calls[0]["num_ctx"] == LlmConfig().num_ctx
+
+
 def test_invalid_answer_is_retried_once_with_the_error():
     client, calls = _client(['{"files": 1}', VALID])
     assert client.complete(MESSAGES, Patch).explanation == "fixed"

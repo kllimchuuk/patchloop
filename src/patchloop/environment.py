@@ -1,4 +1,4 @@
-"""Environment checks behind `patchloop doctor`. Each check returns a result, never raises."""
+"""Environment checks behind `patchloop check`. Each check returns a result, never raises."""
 
 import json
 import subprocess

@@ -43,8 +43,14 @@ Každý záznam: dátum, rozhodnutie, prečo, čo sa zmenilo. Rozhodnutia robí 
 14. **Jazyk promptov a vysvetlení systému: angličtina, jazyk vysvetlení konfigurovateľný.**
     - *Prečo:* malé lokálne modely lepšie zvládajú anglické prompty; kód a chybové správy nástrojov sú tiež po anglicky.
     - *Zmenilo sa:* SPEC §2; v `patchloop.yml` pribudne kľúč `language`.
-15. **Organizácia práce podľa vzoru Sentinel:** úlohy na sedenia v `docs/prompts/NN-*.md` (po anglicky), správy po sedeniach v `docs/reports/NN-*.md` vo fixnom formáte, žurnál rozhodnutí tu. Pred zverejnením repozitára sa servisné súbory (`CLAUDE.md`, `docs/prompts/`) môžu odstrániť samostatným commitom; v histórii zostanú.
+15. **Organizácia práce podľa vzoru Sentinel:** úlohy na sedenia v `docs/prompts/NN-*.md` (po anglicky), správy po sedeniach v `docs/reports/NN-*.md` (po slovensky) vo fixnom formáte, žurnál rozhodnutí tu. Pred zverejnením repozitára sa servisné súbory (`CLAUDE.md`, `docs/prompts/`) môžu odstrániť samostatným commitom; v histórii zostanú.
 16. **Referenčný projekt:** na organizáciu práce (SPEC, žurnál rozhodnutí, správy po etapách, štruktúra CLAUDE.md) sa inšpirujeme verejným repozitárom Sentinel; jeho obmedzenia knižníc sa na nás nevzťahujú.
 17. **Prostredie: Python 3.12, správca závislostí `uv` (nahrádza rozhodnutie 13).**
     - *Prečo:* `uv.lock` pripína presné verzie knižníc (LangGraph, LiteLLM a ďalšie sa často menia), rovnaké prostredie na každom stroji a v Dockeri; `uv sync` je rýchly a jedným príkazom vytvorí prostredie. Rovnaký prístup má referenčný projekt. Python 3.12 podporujú všetky plánované knižnice.
-    - *Zmenilo sa:* `requires-python >= 3.12`, `[dependency-groups] dev` v `pyproject.toml`, súbory `uv.lock` a `.python-version` v git, SPEC §2 a §13, `CLAUDE.md`, `README.md`. Príkazy: `uv sync`, `uv run pytest -q`, `uv run patchloop doctor`.
+    - *Zmenilo sa:* `requires-python >= 3.12`, `[dependency-groups] dev` v `pyproject.toml`, súbory `uv.lock` a `.python-version` v git, SPEC §2 a §13, `CLAUDE.md`, `README.md`. Príkazy: `uv sync`, `uv run pytest -q`, `uv run patchloop check`.
+18. **Model: `qwen3.5:9b-q4_K_M` (GGUF, rušič llama.cpp), nie predvolený tag `qwen3.5:9b`.**
+    - *Prečo:* na Macu s Apple Silicon `ollama pull qwen3.5:9b` stiahne variant MLX (`nvfp4`, 7,6 GB), ktorý nepodporuje štruktúrovaný výstup (`structured output is unavailable`, overené priamo cez API Ollama). Variant `q4_K_M` (6,6 GB, ako v pláne) štruktúrovaný výstup podporuje a beží 100 % na GPU.
+    - *Zmenilo sa:* predvolený `llm.model` v `config.py`, hint v `patchloop check`. Pri výbere ďalších modelov vždy pripájať explicitný tag kvantizácie.
+19. **Kontextové okno: `llm.num_ctx = 16384` v konfigurácii.**
+    - *Prečo:* Ollama predvolene používa 4096 tokenov, čo nestačí na kód súborov, chyby a históriu pokusov.
+    - *Zmenilo sa:* `LlmConfig.num_ctx`, odovzdáva sa v každej požiadavke.

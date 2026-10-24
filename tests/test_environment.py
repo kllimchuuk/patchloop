@@ -2,7 +2,7 @@ import subprocess
 import urllib.error
 
 from patchloop.config import Config
-from patchloop.doctor import check_docker, check_ollama, check_python
+from patchloop.environment import check_docker, check_ollama, check_python
 
 
 def _done(code, out=""):
@@ -36,7 +36,7 @@ def test_ollama_unreachable_is_a_fail():
 
 
 def test_ollama_model_present_and_missing():
-    present = check_ollama(Config(), lambda url: {"models": [{"name": "qwen3.5:9b"}]})
+    present = check_ollama(Config(), lambda url: {"models": [{"name": "qwen3.5:9b-q4_K_M"}]})
     assert all(i.ok for i in present)
     missing = check_ollama(Config(), lambda url: {"models": [{"name": "other:1b"}]})
-    assert missing[1].ok is False and missing[1].hint == "ollama pull qwen3.5:9b"
+    assert missing[1].ok is False and missing[1].hint == "ollama pull qwen3.5:9b-q4_K_M"

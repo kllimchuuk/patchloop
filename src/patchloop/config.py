@@ -16,9 +16,10 @@ class _Section(BaseModel):
 
 
 class LlmConfig(_Section):
-    model: str = "ollama_chat/qwen3.5:9b"  # LiteLLM name: <provider>/<model>
+    model: str = "ollama_chat/qwen3.5:9b-q4_K_M"  # LiteLLM name: <provider>/<model>
     base_url: str = "http://localhost:11434"
     timeout_s: float = Field(120.0, gt=0)
+    num_ctx: int = Field(16384, ge=2048)  # Ollama default (4096) is too small
 
 
 class Config(_Section):

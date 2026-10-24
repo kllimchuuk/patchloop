@@ -6,7 +6,6 @@ build-backend = "setuptools.build_meta"
 name = "patchloop"
 version = "0.1.0"
 description = "Multi-agent system that fixes bugs in Python projects on a local LLM"
-readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2",

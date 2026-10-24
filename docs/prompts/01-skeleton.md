@@ -28,7 +28,7 @@ macOS 26.5, Apple M4, 16 GB RAM, 156 GB free, Python 3.12 in `.venv` (managed by
 - `llm/cache.py`: cache of answers on disk keyed by sha256(model, messages, schema) under a gitignored `cache/` directory.
 - A fake client for tests (same interface, returns prepared answers). Tests must not use the network or a real model.
 
-## Step 5. `patchloop doctor`
+## Step 5. `patchloop check`
 - CLI command (Typer + Rich) checking: Python version, Docker reachable, Ollama reachable at `base_url`, configured model present. Each check prints OK/FAIL with a one-line hint (for example the exact `ollama pull …` command). Missing Ollama is a FAIL, not a crash.
 - Test the command logic with fakes.
 
@@ -37,4 +37,4 @@ macOS 26.5, Apple M4, 16 GB RAM, 156 GB free, Python 3.12 in `.venv` (managed by
 - A small manual script or command that asks the model for a `Patch` for a tiny hard-coded buggy function and prints the validated result. Run it once and report the latency.
 
 ## End of session
-Run `ruff check .` and `pytest -q`; both must pass. Then write `docs/reports/01-skeleton.md` in the format from `CLAUDE.md`. In "Потрібне рішення" give your recommendation (default model, `llm.timeout_s`, whether the cache key needs more fields). Do not continue to the next step of SPEC §14.
+Run `ruff check .` and `pytest -q`; both must pass. Then write `docs/reports/01-skeleton.md` in the format from `CLAUDE.md`. In "Potrebné rozhodnutie" give your recommendation (default model, `llm.timeout_s`, whether the cache key needs more fields). Do not continue to the next step of SPEC §14.
