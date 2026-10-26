@@ -249,7 +249,7 @@ patchloop report <run_id>       # HTML správa
 ```
 src/patchloop/
   cli.py            # Typer
-  config.py         # načítanie patchloop.yml a defaultov
+  config.py         # modely Pydantic s predvolenými hodnotami, načítanie patchloop.yml
   schemas.py        # Pydantic kontrakty (schema_version)
   graph.py          # LangGraph: uzly, hrany, podmienky zastavenia
   agents/           # programmer.py, tester.py, reviewer.py
@@ -259,7 +259,7 @@ src/patchloop/
   context/          # chybová správa, navigácia, vektorové hľadanie
   db/               # modely, migrácie
   report/           # HTML správa
-configs/            # predvolené nastavenia
+configs/            # ďalšie konfiguračné súbory (predvolené hodnoty sú v config.py)
 tests/
 docs/
 ```

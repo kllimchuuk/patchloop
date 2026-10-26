@@ -5,7 +5,9 @@ from patchloop.schemas import SCHEMA_VERSION, Failure, Patch, RunResult
 
 
 def test_round_trip():
-    result = RunResult(status="fixed", best_attempt=1, diff="--- a\n+++ b\n", stop_reason="success")
+    result = RunResult(
+        status="fixed", best_attempt=1, diff="--- a\n+++ b\n", stop_reason="success"
+    )
     assert RunResult.model_validate_json(result.model_dump_json()) == result
     assert result.schema_version == SCHEMA_VERSION
 

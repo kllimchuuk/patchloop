@@ -12,11 +12,15 @@ def test_defaults_load_without_a_file(tmp_path, monkeypatch):
 
 def test_file_overrides_defaults(tmp_path):
     path = tmp_path / "patchloop.yml"
-    path.write_text("max_attempts: 2\nllm:\n  model: ollama_chat/x:1b\n", encoding="utf-8")
+    path.write_text(
+        "max_attempts: 2\nllm:\n  model: ollama_chat/x:1b\n", encoding="utf-8"
+    )
     cfg = load_config(path)
     assert cfg.max_attempts == 2
     assert cfg.llm.model == "ollama_chat/x:1b"
-    assert cfg.llm.base_url == Config().llm.base_url  # untouched keys keep their defaults
+    assert (
+        cfg.llm.base_url == Config().llm.base_url
+    )  # untouched keys keep their defaults
 
 
 def test_unknown_key_is_an_error(tmp_path):

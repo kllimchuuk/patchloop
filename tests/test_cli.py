@@ -13,10 +13,13 @@ def test_version():
 
 
 def test_check_exit_code_follows_the_checks(monkeypatch):
-    monkeypatch.setattr("patchloop.cli.run_checks", lambda cfg: [CheckItem("A", True, "fine")])
+    monkeypatch.setattr(
+        "patchloop.cli.run_checks", lambda cfg: [CheckItem("A", True, "fine")]
+    )
     assert runner.invoke(app, ["check"]).exit_code == 0
     monkeypatch.setattr(
-        "patchloop.cli.run_checks", lambda cfg: [CheckItem("B", False, "down", "start it")]
+        "patchloop.cli.run_checks",
+        lambda cfg: [CheckItem("B", False, "down", "start it")],
     )
     result = runner.invoke(app, ["check"])
     assert result.exit_code == 1 and "start it" in result.output

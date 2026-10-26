@@ -23,7 +23,8 @@ class LLMError(RuntimeError):
 
 
 class LLMClient(Protocol):
-    def complete(self, messages: Messages, schema: type[T]) -> T: ...
+    def complete(self, messages: Messages, schema: type[T]) -> T:
+        ...
 
 
 def _default_completion(**kwargs: Any) -> str:
@@ -86,7 +87,11 @@ class LiteLLMClient:
                 reasoning_effort="low" if self.config.thinking else "none",
                 response_format={
                     "type": "json_schema",
-                    "json_schema": {"name": schema.__name__, "schema": json_schema, "strict": True},
+                    "json_schema": {
+                        "name": schema.__name__,
+                        "schema": json_schema,
+                        "strict": True,
+                    },
                 },
             )
         except Exception as exc:  # LiteLLM raises many provider-specific types

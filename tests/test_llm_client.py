@@ -39,7 +39,9 @@ def test_thinking_is_off_by_default_and_can_be_enabled():
     client, calls = _client([VALID])
     client.complete(MESSAGES, Patch)
     assert calls[0]["reasoning_effort"] == "none"
-    thinking = LiteLLMClient(LlmConfig(thinking=True), None, lambda **kw: calls.append(kw) or VALID)
+    thinking = LiteLLMClient(
+        LlmConfig(thinking=True), None, lambda **kw: calls.append(kw) or VALID
+    )
     thinking.complete(MESSAGES, Patch)
     assert calls[-1]["reasoning_effort"] == "low"
 
@@ -72,7 +74,9 @@ def test_cache_avoids_the_second_call(tmp_path):
 
 
 def test_fake_client_returns_prepared_answers_in_order():
-    fake = FakeLLMClient([Patch(files={}, explanation="one"), {"files": {}, "explanation": "two"}])
+    fake = FakeLLMClient(
+        [Patch(files={}, explanation="one"), {"files": {}, "explanation": "two"}]
+    )
     assert fake.complete(MESSAGES, Patch).explanation == "one"
     assert fake.complete(MESSAGES, Patch).explanation == "two"
     with pytest.raises(LLMError):

@@ -66,5 +66,7 @@ class RunResult(_Contract):
     best_attempt: int | None = Field(None, ge=0)
     diff: str = ""
     explanation: str = ""
-    stop_reason: Literal["success", "iteration_limit", "stagnation", "timeout", "none"] = "none"
+    stop_reason: Literal[
+        "success", "iteration_limit", "stagnation", "timeout", "none"
+    ] = "none"
     reliability: Literal["normal", "reduced"] = "normal"  # reduced = no generated tests

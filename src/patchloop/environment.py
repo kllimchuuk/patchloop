@@ -32,7 +32,9 @@ def _run(cmd: list[str]) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True, timeout=20, check=False)
 
 
-def check_docker(run: Callable[[list[str]], subprocess.CompletedProcess] = _run) -> CheckItem:
+def check_docker(
+    run: Callable[[list[str]], subprocess.CompletedProcess] = _run
+) -> CheckItem:
     hint = "start Docker Desktop (or the Docker daemon) and try again"
     try:
         result = run(["docker", "version", "--format", "{{.Server.Version}}"])

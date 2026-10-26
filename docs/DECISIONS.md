@@ -57,3 +57,6 @@ Každý záznam: dátum, rozhodnutie, prečo, čo sa zmenilo. Rozhodnutia robí 
 20. **«Thinking» modelu je predvolene vypnutý (`llm.thinking: false`).**
     - *Prečo:* orientačné meranie na dvoch malých chybách (po 3 behy, model `qwen3.5:9b-q4_K_M`, štruktúrovaná odpoveď): bez thinking 3,2 s a 12,3 s, s thinking 12,8 s a 15,1 s; správnosť rovnaká (3/3 v oboch režimoch). Cez LiteLLM: 5,3 s proti 13,6 s. Na malých úlohách thinking nepridáva kvalitu, len čas.
     - *Zmenilo sa:* `LlmConfig.thinking`, v požiadavke `reasoning_effort="none"` (zapnuté: `"low"`). Pri ťažších chybách sa môže oplatiť zapnúť thinking pre Programátora; vrátime sa k tomu pri testovaní na vlastných projektoch.
+21. **Predvolené hodnoty konfigurácie sú v modeloch Pydantic (`config.py`), nie v `configs/default.yaml`.**
+    - *Prečo:* `configs/` leží mimo `src/patchloop/`, takže nainštalovaný balík by súbor nenašiel. Hodnoty v modeloch sú na jednom mieste, typované a validované; `patchloop.yml` ich prepíše.
+    - *Zmenilo sa:* SPEC §13 (opis `config.py` a `configs/`).

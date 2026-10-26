@@ -10,7 +10,9 @@ from patchloop import __version__
 from patchloop.config import ConfigError, load_config
 from patchloop.environment import run_checks
 
-app = typer.Typer(help="Fix bugs in Python projects with a multi-agent system on a local LLM.")
+app = typer.Typer(
+    help="Fix bugs in Python projects with a multi-agent system on a local LLM."
+)
 console = Console()
 
 
@@ -23,7 +25,10 @@ def _version(value: bool) -> None:
 @app.callback()
 def root(
     version: Annotated[
-        bool, typer.Option("--version", callback=_version, is_eager=True, help="Show the version.")
+        bool,
+        typer.Option(
+            "--version", callback=_version, is_eager=True, help="Show the version."
+        ),
     ] = False,
 ) -> None:
     """Fix bugs in Python projects with a multi-agent system on a local LLM."""
@@ -31,7 +36,9 @@ def root(
 
 @app.command()
 def check(
-    config: Annotated[Path | None, typer.Option("--config", help="Path to patchloop.yml.")] = None,
+    config: Annotated[
+        Path | None, typer.Option("--config", help="Path to patchloop.yml.")
+    ] = None,
 ) -> None:
     """Check Python, Docker, Ollama and the configured model."""
     try:
