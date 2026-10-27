@@ -28,7 +28,7 @@ def test_tag_follows_the_dockerfile_template(monkeypatch):
 
 def test_dockerfile_copies_manifests_and_installs():
     text = render_dockerfile(CFG, {"req files/a.txt": b""}, CMD)
-    assert text.splitlines()[0] == "FROM python:3.12"
+    assert text.splitlines()[:2] == ["FROM python:3.12", 'LABEL patchloop="env"']
     assert 'COPY ["req files/a.txt", "/work/req files/a.txt"]' in text
     assert f"RUN {CMD}" in text
 
@@ -39,7 +39,10 @@ def test_builds_once_then_uses_cache():
     second = ensure_image(docker, CFG, MANIFESTS, CMD)
     assert first == second
     assert len(docker.api.builds) == 1
-    assert docker.api.builds[0]["dockerfile"] == DOCKERFILE
+    build = docker.api.builds[0]
+    assert build["dockerfile"] == DOCKERFILE
+    memory = 2048 * 1024 * 1024
+    assert build["container_limits"] == {"memory": memory, "memswap": memory}
 
 
 @pytest.mark.parametrize("name", ["/etc/passwd", "../x.txt", ".patchloop/Dockerfile"])

@@ -4,7 +4,7 @@ import docker
 import pytest
 
 from patchloop.config import SandboxConfig
-from patchloop.sandbox import ensure_image, make_workspace, run_in_sandbox, workspace
+from patchloop.sandbox import SandboxError, ensure_image, make_workspace, run_in_sandbox, workspace
 
 pytestmark = pytest.mark.docker
 
@@ -44,6 +44,18 @@ def py(code):
     return ["python", "-c", code]
 
 
+def test_prepared_image_is_labelled(client, tmp_path):
+    _, image, _, _ = sandbox(client, tmp_path)
+    assert client.images.get(image).labels.get("patchloop") == "env"
+
+
+def test_build_memory_limit_is_enforced(client):
+    config = SandboxConfig(base_image=BASE, build_memory_mb=256)
+    hog = "python -c 'bytearray(600_000_000)'"
+    with pytest.raises(SandboxError, match="build failed"):
+        ensure_image(client, config, {}, hog)
+
+
 def test_network_is_unreachable(client, tmp_path):
     config, image, _, work = sandbox(client, tmp_path)
     code = "import socket; socket.create_connection(('1.1.1.1', 80), timeout=3)"
@@ -60,6 +72,24 @@ def test_runs_as_non_root_and_can_write_the_workspace(client, tmp_path):
     assert not (project / "b.txt").exists()  # the original is untouched
 
 
+def test_root_filesystem_is_read_only_but_tmp_is_writable(client, tmp_path):
+    config, image, _, work = sandbox(client, tmp_path)
+    code = (
+        "import getpass, tempfile; tempfile.NamedTemporaryFile(dir='/tmp').write(b'x');"
+        "print(getpass.getuser()); open('/usr/x', 'w')"
+    )
+    result = run_in_sandbox(client, config, image, work, py(code))
+    assert result.exit_code != 0 and "Read-only file system" in result.stderr
+    assert result.stdout.strip() == "patchloop"
+
+
+def test_large_files_are_refused(client, tmp_path):
+    config, image, _, work = sandbox(client, tmp_path, max_file_mb=1)
+    code = "open('big', 'wb').write(b'x' * 2_000_000)"
+    result = run_in_sandbox(client, config, image, work, py(code))
+    assert result.exit_code != 0 and "File too large" in result.stderr
+
+
 def test_timeout_kills_the_container(client, tmp_path):
     config, image, _, work = sandbox(client, tmp_path, run_timeout_s=3)
     result = run_in_sandbox(client, config, image, work, py("while True: pass"))
@@ -73,7 +103,6 @@ def test_memory_limit_is_enforced(client, tmp_path):
 
 
 def test_no_leftover_containers(client, tmp_path):
-    before = {c.id for c in client.containers.list(all=True)}
     config, image, _, work = sandbox(client, tmp_path)
     run_in_sandbox(client, config, image, work, py("print('hi')"))
-    assert {c.id for c in client.containers.list(all=True)} == before
+    assert client.containers.list(all=True, filters={"label": "patchloop"}) == []

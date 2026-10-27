@@ -16,6 +16,8 @@ from patchloop.config import SandboxConfig
 from patchloop.sandbox.errors import SandboxError
 
 DOCKERFILE = ".patchloop/Dockerfile"  # kept apart from project files, so no manifest can replace it
+LABEL = 'LABEL patchloop="env"'  # old images: docker image prune -a --filter label=patchloop
+MB = 1024 * 1024
 
 
 def _check_manifest_names(manifests: Mapping[str, bytes]) -> None:
@@ -30,7 +32,7 @@ def _check_manifest_names(manifests: Mapping[str, bytes]) -> None:
 def render_dockerfile(
     config: SandboxConfig, manifests: Mapping[str, bytes], install_cmd: str
 ) -> str:
-    lines = [f"FROM {config.base_image}", "WORKDIR /work"]
+    lines = [f"FROM {config.base_image}", LABEL, "WORKDIR /work"]
     # JSON form, so paths with spaces stay one argument
     lines += [f"COPY {json.dumps([name, f'/work/{name}'])}" for name in sorted(manifests)]
     if install_cmd:
@@ -62,9 +64,11 @@ def _build(client: Any, config: SandboxConfig, context: io.BytesIO, tag: str) ->
 
     The deadline is checked on every output line; a build that prints nothing is stopped by the
     HTTP read timeout, which is set to the same value. Closing the stream makes the daemon cancel
-    the build.
+    the build. Installing dependencies runs their setup code with network access, so the build
+    containers get a memory limit as well.
     """
     deadline = time.monotonic() + config.prepare_timeout_s
+    memory = config.build_memory_mb * MB
     stream = client.api.build(
         fileobj=context,
         custom_context=True,
@@ -74,6 +78,7 @@ def _build(client: Any, config: SandboxConfig, context: io.BytesIO, tag: str) ->
         forcerm=True,
         decode=True,
         timeout=config.prepare_timeout_s,
+        container_limits={"memory": memory, "memswap": memory},
     )
     tail: list[str] = []
     try:
