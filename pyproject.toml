@@ -13,6 +13,7 @@ dependencies = [
     "typer",
     "rich",
     "pyyaml",
+    "docker>=7.2.0",
 ]
 
 [dependency-groups]
@@ -26,6 +27,8 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not docker'"
+markers = ["docker: needs a running Docker daemon and a pulled base image (run with -m docker)"]
 
 [tool.ruff]
 line-length = 100

@@ -238,6 +238,7 @@ patchloop report <run_id>       # HTML správa
 ## 12. Požiadavky
 
 - **Bezpečnosť:** kód beží len v kontajneri bez siete; originál sa nemení; tajomstvá len v `.env`.
+  Pracovná kópia je po behu nedôveryhodná: kód hostiteľa (čítanie súborov pre agentov, diff, `apply`) nenasleduje symbolické odkazy z nej a pracuje len s cestami vnútri kópie. `.env` projektu sa do pieskoviska nekopíruje, ak to `patchloop.yml` výslovne nepovolí (`sandbox.copy_env`).
 - **Reprodukovateľnosť:** fixné seedy, cache odpovedí modelu, zaznamenaná verzia modelu a promptu.
 - **Bez tichých náhrad:** chýbajúci model, obraz alebo Docker = chyba s jasnou správou, nie mlčanlivý prechod na iný postup.
 - **Model nikdy nerozhoduje o riadení toku** (limity, zastavenie).

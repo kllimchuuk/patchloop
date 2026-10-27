@@ -41,3 +41,19 @@ def test_empty_file_gives_defaults(tmp_path):
     path = tmp_path / "patchloop.yml"
     path.write_text("", encoding="utf-8")
     assert load_config(path) == Config()
+
+
+def test_sandbox_defaults_and_override(tmp_path):
+    assert Config().sandbox.base_image == "python:3.12"
+    path = tmp_path / "patchloop.yml"
+    path.write_text("sandbox:\n  memory_mb: 512\n", encoding="utf-8")
+    cfg = load_config(path)
+    assert cfg.sandbox.memory_mb == 512
+    assert cfg.sandbox.cpus == Config().sandbox.cpus
+
+
+def test_unknown_sandbox_key_is_an_error(tmp_path):
+    path = tmp_path / "patchloop.yml"
+    path.write_text("sandbox:\n  memory: 512\n", encoding="utf-8")
+    with pytest.raises(ConfigError):
+        load_config(path)
