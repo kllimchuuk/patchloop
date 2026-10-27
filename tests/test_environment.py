@@ -10,8 +10,8 @@ def _done(code, out=""):
 
 
 def test_python_version():
-    assert check_python((3, 11, 9)).ok
-    assert not check_python((3, 10, 0)).ok
+    assert check_python((3, 12, 1)).ok
+    assert not check_python((3, 11, 9)).ok
 
 
 def test_docker_ok_and_down():

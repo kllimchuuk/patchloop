@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 from patchloop.config import Config
 
-MIN_PYTHON = (3, 11)
+MIN_PYTHON = (3, 12)  # requires-python in pyproject.toml (decision 17)
 
 
 @dataclass(frozen=True)
@@ -25,7 +25,7 @@ def check_python(version: tuple[int, ...] = tuple(sys.version_info[:3])) -> Chec
     text = ".".join(str(part) for part in version)
     if tuple(version[:2]) >= MIN_PYTHON:
         return CheckItem("Python", True, text)
-    return CheckItem("Python", False, text, "patchloop needs Python 3.11 or newer")
+    return CheckItem("Python", False, text, "patchloop needs Python 3.12 or newer")
 
 
 def _run(cmd: list[str]) -> subprocess.CompletedProcess:

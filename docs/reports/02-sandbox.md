@@ -5,14 +5,14 @@
 **Dátum:** 26. 10. 2026 · **Vykonávateľ:** Claude Code (Sonnet 5.5)
 
 ```
-ZVIT 26. 10. 2026 — Sedenie 02, pieskovisko
+ZVIT 27. 10. 2026 — Sedenie 02, pieskovisko
 Hotovo: balík sandbox/ (workspace.py, image.py, runner.py, errors.py), sekcia sandbox v konfigurácii,
-        závislosť docker, značka pytest docker; po code review opravených 10 nedostatkov (pozri nižšie).
-Čísla: 52 testov bežne (0,14 s, z toho 27 nových), 6 testov s -m docker (5,4 s), ruff bez chýb;
-       zostavenie obrazu (python:3.12-slim + jedna závislosť, základný obraz už stiahnutý) 1,8 s,
-       opakované volanie z cache 0,025 s; beh kontajnera s importom nainštalovanej závislosti
-       0,07–0,11 s (5 behov); po behoch 0 zvyšných kontajnerov.
-Odchýlky od SPEC: žiadne
+        závislosť docker, značka pytest docker; opravy po dvoch code review (rozhodnutia 22 a 23).
+Čísla: 57 testov bežne (0,17 s), 10 testov s -m docker (5,8 s), ruff bez chýb; zostavenie obrazu
+       (python:3.12-slim + jedna závislosť, základný obraz už stiahnutý) 2,1 s, opakované volanie
+       z cache 0,02 s; beh kontajnera s importom nainštalovanej závislosti 0,08–0,10 s (5 behov,
+       s init a read-only koreňom); po behoch 0 zvyšných kontajnerov.
+Odchýlky od SPEC: žiadne (SPEC §12 doplnená o pravidlo pre pracovnú kópiu a .env)
 Potrebné rozhodnutie: (a) v kroku 3 určiť, ako sa nainštaluje samotný projekt (pip install .):
        fáza 1 kopíruje len manifesty, takže potrebuje zdrojáky; (b) základný obraz: SPEC uvádza
        python:3.12 (~1 GB), testy používajú python:3.12-slim; zvážiť slim ako predvolený po
@@ -33,10 +33,21 @@ Potrebné rozhodnutie: (a) v kroku 3 určiť, ako sa nainštaluje samotný proje
 9. Pracovná kópia sa maže (`remove_workspace`, kontextový manažér `workspace`).
 10. `user` a `image_repository` sú v konfigurácii; neodstránený kontajner je chyba s príkazom `docker rm -f`. `WORKDIR /work` zostáva konštanta: je to dohoda medzi `image.py` a `runner.py`, nie limit.
 
+## Druhé code review (rozhodnutie 23)
+
+Porovnanie s OWASP Docker Security Cheat Sheet a dokumentáciou docker-py. Opravené: obídenie kontroly
+roota (`sandbox.user: "00"`), koreň len na čítanie + tmpfs `/tmp`, `init`, ulimity `nofile`/`fsize`/`core`,
+`USER`/`LOGNAME`, limit pamäte pri zostavení, značky na kontajneroch a obrazoch, `.env` mimo kópie,
+prísnejší `remove_workspace`, `MIN_PYTHON = 3.12`. Pravidlo o nedôveryhodnej kópii je v SPEC §12.
+
 ## Overené izolácie (testy `-m docker`)
 
 - Sieť: pripojenie na `1.1.1.1:80` zlyhá (`Network is unreachable`).
 - Používateľ: proces nebeží ako root, zapisuje do `/work`; originál projektu sa nemení; pracovná kópia sa po behu dá zmazať.
 - Časový limit: nekonečný cyklus je zabitý po `run_timeout_s`.
 - Pamäť: pri limite 64 MB je pokus o 400 MB zabitý (OOM).
-- Po behu kontajner zaniká (nič nezostáva v `docker ps -a`).
+- Koreňový systém je len na čítanie, do `/tmp` sa dá zapisovať, `getpass.getuser()` funguje.
+- Súbor väčší ako `max_file_mb` sa nedá zapísať (`File too large`).
+- Zostavenie, ktoré prekročí `build_memory_mb`, zlyhá so `SandboxError`.
+- Obraz má značku `patchloop=env`.
+- Po behu kontajner zaniká (nič so značkou `patchloop` nezostáva v `docker ps -a`).

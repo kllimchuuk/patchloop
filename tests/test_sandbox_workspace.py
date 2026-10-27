@@ -46,10 +46,27 @@ def test_workspace_is_removed_after_use(tmp_path):
     assert project.is_dir()
 
 
-def test_remove_refuses_other_directories(tmp_path):
+def test_remove_refuses_directories_it_did_not_create(tmp_path):
+    lookalike = tmp_path / "patchloop-demo"  # a user project with the same prefix
+    lookalike.mkdir()
     with pytest.raises(ValueError):
-        remove_workspace(tmp_path)
-    assert tmp_path.exists()
+        remove_workspace(lookalike)
+    assert lookalike.exists()
+
+
+def test_env_files_are_left_out_by_default(tmp_path):
+    project = tmp_path / "proj"
+    (project / "sub").mkdir(parents=True)
+    for name in (".env", ".env.local", "sub/.env", ".env.example"):
+        (project / name).write_text("SECRET=1\n", encoding="utf-8")
+
+    work = make_workspace(project, parent=tmp_path)
+    assert not (work / ".env").exists() and not (work / ".env.local").exists()
+    assert not (work / "sub" / ".env").exists()
+    assert (work / ".env.example").exists()
+
+    with_env = make_workspace(project, parent=tmp_path, copy_env=True)
+    assert (with_env / ".env").exists() and (with_env / "sub" / ".env").exists()
 
 
 def test_missing_project_is_an_error(tmp_path):
