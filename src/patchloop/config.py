@@ -25,10 +25,23 @@ class LlmConfig(_Section):
     )
 
 
+class SandboxConfig(_Section):
+    base_image: str = "python:3.12"
+    image_repository: str = "patchloop-env"  # prepared images are tagged <repository>:<hash>
+    user: str | None = None  # "uid:gid" in the container; None = the host user (never root)
+    memory_mb: int = Field(1024, ge=64)
+    cpus: float = Field(1.0, gt=0)
+    pids_limit: int = Field(256, ge=16)
+    run_timeout_s: float = Field(120.0, gt=0)  # one container run, not the whole task
+    prepare_timeout_s: float = Field(900.0, gt=0)  # image build, with network
+    output_limit_bytes: int = Field(200_000, ge=1024)  # the tail is kept
+
+
 class Config(_Section):
     language: str = "en"  # language of explanations returned by the system
     max_attempts: int = Field(4, ge=1, le=10)  # Programmer attempts (SPEC §8)
     llm: LlmConfig = LlmConfig()
+    sandbox: SandboxConfig = SandboxConfig()
 
 
 class ConfigError(ValueError):
