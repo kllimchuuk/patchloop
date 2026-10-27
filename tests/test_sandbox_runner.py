@@ -24,6 +24,15 @@ def test_container_is_isolated_and_limited():
     assert kwargs["security_opt"] == ["no-new-privileges"]
     assert kwargs["mem_limit"] == "1024m" and kwargs["pids_limit"] == 256
     assert kwargs["user"] == "1000:1000" and kwargs["environment"]["HOME"] == "/tmp"
+    assert kwargs["environment"]["USER"] and kwargs["environment"]["LOGNAME"]
+    assert kwargs["read_only"] is True and "/tmp" in kwargs["tmpfs"]
+    assert "nosuid" in kwargs["tmpfs"]["/tmp"] and kwargs["init"] is True
+    assert {u.name: u.hard for u in kwargs["ulimits"]} == {
+        "nofile": 1024,
+        "fsize": 512 * 1024 * 1024,
+        "core": 0,
+    }
+    assert kwargs["labels"] == {"patchloop": "sandbox"}
     assert kwargs["log_config"]["config"]["max-file"] == "2"
     assert (result.exit_code, result.stdout, result.timed_out) == (0, "ok\n", False)
     assert docker.containers.last.removed
@@ -36,8 +45,15 @@ def test_default_user_is_the_host_user_and_never_root(monkeypatch):
     monkeypatch.setattr("os.getuid", lambda: 0)
     with pytest.raises(SandboxError, match="root"):
         container_user(SandboxConfig())
-    with pytest.raises(SandboxError, match="root"):
-        container_user(SandboxConfig(user="0:0"))
+    for root in ("0:0", "00", "000:1"):
+        with pytest.raises(SandboxError, match="root"):
+            container_user(SandboxConfig(user=root))
+
+
+@pytest.mark.parametrize("user", ["root", "nobody", "1000:abc", " 1000"])
+def test_user_must_be_numeric(user):
+    with pytest.raises(ValueError):
+        SandboxConfig(user=user)
 
 
 def test_failure_exit_code_and_stderr_are_captured():

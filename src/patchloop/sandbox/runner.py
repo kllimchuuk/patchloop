@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from docker.errors import APIError, DockerException, ImageNotFound, NotFound
+from docker.types import Ulimit
 from requests.exceptions import ConnectionError, ReadTimeout, RequestException
 from urllib3.exceptions import ReadTimeoutError
 
@@ -17,6 +18,9 @@ from patchloop.sandbox.errors import SandboxError
 WORKDIR = "/work"  # shared with the WORKDIR of the prepared image (image.py)
 NANO = 1_000_000_000
 EXIT_TIMEOUT = 124  # the usual exit code of `timeout`
+LABELS = {"patchloop": "sandbox"}  # lets leftovers be found: docker ps -a --filter label=patchloop
+MB = 1024 * 1024
+BASE_ENV = {"HOME": "/tmp", "USER": "patchloop", "LOGNAME": "patchloop"}
 
 
 @dataclass(frozen=True)
@@ -33,14 +37,23 @@ class ExecResult:
 def container_user(config: SandboxConfig) -> str:
     """The host user by default: files written in /work stay writable and removable on the host."""
     if config.user is not None:
-        user = config.user
+        user = config.user  # numeric only (validated in config): a name could map to root
     elif hasattr(os, "getuid"):
         user = f"{os.getuid()}:{os.getgid()}"
     else:
         raise SandboxError("cannot detect the host user; set sandbox.user in patchloop.yml")
-    if user.split(":", 1)[0] in ("0", "root"):
+    if int(user.split(":", 1)[0]) == 0:  # also catches "00"
         raise SandboxError("refusing to run the sandbox as root; set sandbox.user to another uid")
     return user
+
+
+def _ulimits(config: SandboxConfig) -> list[Ulimit]:
+    # no nproc: without user namespaces it counts every process of the host uid; pids_limit is used
+    return [
+        Ulimit(name="nofile", soft=config.max_open_files, hard=config.max_open_files),
+        Ulimit(name="fsize", soft=config.max_file_mb * MB, hard=config.max_file_mb * MB),
+        Ulimit(name="core", soft=0, hard=0),
+    ]
 
 
 def _is_wait_timeout(exc: Exception) -> bool:
@@ -121,8 +134,12 @@ def run_in_sandbox(
             command,
             working_dir=WORKDIR,
             volumes={str(workdir): {"bind": WORKDIR, "mode": "rw"}},
-            environment={"HOME": "/tmp", **(env or {})},
+            # the host uid has no /etc/passwd entry; USER/LOGNAME keep getpass.getuser() working
+            environment={**BASE_ENV, **(env or {})},
             network_mode="none",
+            read_only=True,
+            tmpfs={"/tmp": f"size={config.tmp_mb}m,nosuid,nodev"},
+            init=True,  # reaps orphaned processes, so zombies do not use up pids_limit
             mem_limit=f"{config.memory_mb}m",
             memswap_limit=f"{config.memory_mb}m",
             nano_cpus=int(config.cpus * NANO),
@@ -130,6 +147,8 @@ def run_in_sandbox(
             cap_drop=["ALL"],
             security_opt=["no-new-privileges"],
             user=container_user(config),
+            ulimits=_ulimits(config),
+            labels=LABELS,
             # the daemon keeps at most ~2x the output limit on its disk, not the whole stream
             log_config={"type": "json-file", "config": {"max-size": str(limit), "max-file": "2"}},
         )

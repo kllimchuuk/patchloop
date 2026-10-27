@@ -28,13 +28,18 @@ class LlmConfig(_Section):
 class SandboxConfig(_Section):
     base_image: str = "python:3.12"
     image_repository: str = "patchloop-env"  # prepared images are tagged <repository>:<hash>
-    user: str | None = None  # "uid:gid" in the container; None = the host user (never root)
+    user: str | None = Field(None, pattern=r"^\d+(:\d+)?$")  # "uid[:gid]"; None = the host user
     memory_mb: int = Field(1024, ge=64)
     cpus: float = Field(1.0, gt=0)
     pids_limit: int = Field(256, ge=16)
+    tmp_mb: int = Field(256, ge=16)  # tmpfs at /tmp; the root filesystem is read-only
+    max_open_files: int = Field(1024, ge=64)
+    max_file_mb: int = Field(512, ge=1)  # largest file a process may write
     run_timeout_s: float = Field(120.0, gt=0)  # one container run, not the whole task
     prepare_timeout_s: float = Field(900.0, gt=0)  # image build, with network
+    build_memory_mb: int = Field(2048, ge=256)  # the build runs dependency install code too
     output_limit_bytes: int = Field(200_000, ge=1024)  # the tail is kept
+    copy_env: bool = False  # copy the project's .env into the sandbox (it may hold real secrets)
 
 
 class Config(_Section):
