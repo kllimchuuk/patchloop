@@ -148,7 +148,7 @@ Stav grafu (LangGraph) drží: snapshot projektu, popis chyby, zoznam pokusov, n
 - **`patchloop.yml`** v projekte prepíše defaulty profilu:
 
 ```yaml
-image: python:3.12
+image: python:3.12-slim
 install: pip install -r requirements.txt
 build: python -m compileall .
 test: pytest -x

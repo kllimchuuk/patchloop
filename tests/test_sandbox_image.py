@@ -28,7 +28,7 @@ def test_tag_follows_the_dockerfile_template(monkeypatch):
 
 def test_dockerfile_copies_manifests_and_installs():
     text = render_dockerfile(CFG, {"req files/a.txt": b""}, CMD)
-    assert text.splitlines()[:2] == ["FROM python:3.12", 'LABEL patchloop="env"']
+    assert text.splitlines()[:2] == [f"FROM {CFG.base_image}",'LABEL patchloop="env"']
     assert 'COPY ["req files/a.txt", "/work/req files/a.txt"]' in text
     assert f"RUN {CMD}" in text
 

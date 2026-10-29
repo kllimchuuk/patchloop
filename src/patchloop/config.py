@@ -26,7 +26,7 @@ class LlmConfig(_Section):
 
 
 class SandboxConfig(_Section):
-    base_image: str = "python:3.12"
+    base_image: str = "python:3.12-slim"
     image_repository: str = "patchloop-env"  # prepared images are tagged <repository>:<hash>
     user: str | None = Field(None, pattern=r"^\d+(:\d+)?$")  # "uid[:gid]"; None = the host user
     memory_mb: int = Field(1024, ge=64)

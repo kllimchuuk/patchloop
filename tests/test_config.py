@@ -44,7 +44,7 @@ def test_empty_file_gives_defaults(tmp_path):
 
 
 def test_sandbox_defaults_and_override(tmp_path):
-    assert Config().sandbox.base_image == "python:3.12"
+    assert Config().sandbox.base_image == "python:3.12-slim"
     path = tmp_path / "patchloop.yml"
     path.write_text("sandbox:\n  memory_mb: 512\n", encoding="utf-8")
     cfg = load_config(path)
