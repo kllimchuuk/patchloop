@@ -42,11 +42,24 @@ class SandboxConfig(_Section):
     copy_env: bool = False  # copy the project's .env into the sandbox (it may hold real secrets)
 
 
+class LoopConfig(_Section):
+    total_timeout_s: float = Field(1800.0, gt=0)  # whole run, not one container (SPEC §8)
+    tail_lines: int = Field(40, ge=5)  # lines of raw output kept when the parser finds nothing
+
+
 class Config(_Section):
     language: str = "en"  # language of explanations returned by the system
     max_attempts: int = Field(4, ge=1, le=10)  # Programmer attempts (SPEC §8)
     llm: LlmConfig = LlmConfig()
     sandbox: SandboxConfig = SandboxConfig()
+    loop: LoopConfig = LoopConfig()
+    # Per-project overrides of the language profile defaults (SPEC §6); None = keep the default.
+    image: str | None = None
+    install: str | None = None
+    build: str | None = None
+    test: str | None = None
+    lint: str | None = None
+    env: dict[str, str] = {}  # only these variables reach the container, never the host's
 
 
 class ConfigError(ValueError):
