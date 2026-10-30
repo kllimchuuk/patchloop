@@ -45,6 +45,9 @@ class SandboxConfig(_Section):
 class LoopConfig(_Section):
     total_timeout_s: float = Field(1800.0, gt=0)  # whole run, not one container (SPEC §8)
     tail_lines: int = Field(40, ge=5)  # lines of raw output kept when the parser finds nothing
+    context_chars: int = Field(24_000, ge=2000)  # code shown to the Programmer in one prompt
+    max_file_chars: int = Field(12_000, ge=500)  # a bigger file is shown as an excerpt only
+    excerpt_lines: int = Field(40, ge=5)  # lines on each side of the failing line in an excerpt
 
 
 class Config(_Section):
