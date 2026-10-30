@@ -3,9 +3,10 @@
 Changing any field means bumping SCHEMA_VERSION so that old runs stay reproducible.
 """
 
+from pathlib import PurePosixPath
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 SCHEMA_VERSION = 1
 
@@ -40,6 +41,23 @@ class Patch(_Contract):
 
     files: dict[str, str]  # relative path -> full new content
     explanation: str
+
+    @field_validator("files")
+    @classmethod
+    def _safe_paths(cls, files: dict[str, str]) -> dict[str, str]:
+        # Paths come from the model, so they are untrusted input.
+        if not files:
+            raise ValueError("patch must contain at least one file")
+        for name in files:
+            path = PurePosixPath(name)
+            if not name or "\\" in name or "\0" in name:
+                raise ValueError(f"invalid path: {name!r}")
+            parts = name.split("/")  # PurePosixPath would hide "." and "//"
+            if path.is_absolute() or ".." in parts or "." in parts or "" in parts:
+                raise ValueError(f"path must be relative and inside the project: {name!r}")
+            if ".git" in path.parts:
+                raise ValueError(f"path must not touch .git: {name!r}")
+        return files
 
 
 class Review(_Contract):

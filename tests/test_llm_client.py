@@ -75,7 +75,10 @@ def test_cache_avoids_the_second_call(tmp_path):
 
 def test_fake_client_returns_prepared_answers_in_order():
     fake = FakeLLMClient(
-        [Patch(files={}, explanation="one"), {"files": {}, "explanation": "two"}]
+        [
+            Patch(files={"a.py": ""}, explanation="one"),
+            {"files": {"a.py": ""}, "explanation": "two"},
+        ]
     )
     assert fake.complete(MESSAGES, Patch).explanation == "one"
     assert fake.complete(MESSAGES, Patch).explanation == "two"

@@ -31,3 +31,32 @@ def test_models_are_frozen():
 def test_line_numbers_start_at_one():
     with pytest.raises(ValidationError):
         Failure(kind="build", message="m", line=0)
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/etc/passwd",
+        "../x.py",
+        "a/../../x.py",
+        "./a.py",
+        ".git/config",
+        "a/.git/hooks/x",
+        "",
+        "a\\b.py",
+        "a\0.py",
+    ],
+)
+def test_patch_rejects_unsafe_paths(path):
+    with pytest.raises(ValidationError):
+        Patch(files={path: "x"}, explanation="e")
+
+
+def test_patch_rejects_empty_files():
+    with pytest.raises(ValidationError):
+        Patch(files={}, explanation="e")
+
+
+def test_patch_accepts_nested_relative_path():
+    patch = Patch(files={"src/pkg/a.py": "x = 1\n"}, explanation="e")
+    assert list(patch.files) == ["src/pkg/a.py"]
