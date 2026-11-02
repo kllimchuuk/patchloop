@@ -79,3 +79,6 @@ Každý záznam: dátum, rozhodnutie, prečo, čo sa zmenilo. Rozhodnutia robí 
     - *Skóre pokusu:* trojica (zostavenie zlyhalo, počet všetkých chýb, počet padajúcich testov); menšia je lepšia, pri rovnosti vyhráva skorší pokus. Zlyhanie zostavenia je vždy horšie ako zlyhanie testov, lebo ďalšie kroky sa vtedy nespustia.
     - *Stagnácia:* rovnaký hash ako ktorýkoľvek skorší pokus, alebo rovnaká množina chýb ako v bezprostredne predchádzajúcom pokuse.
     - *Zmenilo sa:* nový `graph.py`, `patching.restore_files`; závislosť `langgraph` (už v zozname SPEC §13) pridaná do `pyproject.toml`.
+26. **Smoke test s reálnym modelom: značka `llm` navyše k `docker`, preskočí sa pri chýbajúcom Ollama alebo modeli; výsledok sa nahlási, nevynucuje sa úspech.**
+    - *Prečo:* test potrebuje bežiaci Ollama so stiahnutým modelom, čo nie je splnené všade; CLAUDE.md zakazuje reálny LLM v obyčajných testoch. Test overuje len to, že beh skončí platným stavom a pôvodný projekt ostane nedotknutý; úspešnosť opravy sa zapisuje do správy ako nameraná hodnota, aby sa prompt neladil na jeden príklad. Dostupnosť Ollama sa zisťuje cez `urllib` zo štandardnej knižnice (bez novej závislosti).
+    - *Zmenilo sa:* nový `tests/test_smoke_llm.py`, značka `llm` v `pyproject.toml`.

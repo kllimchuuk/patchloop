@@ -41,7 +41,7 @@ class HistoryEntry:
     """One earlier attempt as the Programmer sees it: what it said and what was still wrong."""
 
     explanation: str
-    failures: tuple[Failure, ...]
+    failures: list[Failure]
 
 
 @dataclass(frozen=True)
@@ -73,10 +73,25 @@ def _format_failures(failures: Sequence[Failure], limit: int) -> str:
     return shown
 
 
+def _history_section(history: Sequence[HistoryEntry]) -> str:
+    entries = []
+    for number, entry in enumerate(history, 1):
+        left = _format_failures(entry.failures, HISTORY_FAILURES) or "(no errors left)"
+        entries.append(f"Attempt {number}: {entry.explanation.strip()}\nErrors after it:\n{left}")
+    return "## Earlier attempts (they did not work)\n" + "\n\n".join(entries)
+
+
+def _code_section(files: Sequence[ContextFile]) -> str:
+    blocks = [
+        f"### FILE {f.path} ({'full' if f.whole else 'excerpt'})\n{f.text}\n### END FILE"
+        for f in files
+    ]
+    return "## Code\n" + ("\n\n".join(blocks) or "(no files could be read)")
+
+
 def build_messages(
     files: Sequence[ContextFile],
     failures: Sequence[Failure],
-    *,
     issue: str | None,
     history: Sequence[HistoryEntry],
     review_comments: Sequence[str],
@@ -87,19 +102,10 @@ def build_messages(
         parts.append(f"## Bug description\n{issue.strip()}")
     parts.append("## Current errors\n" + (_format_failures(failures, MAX_FAILURES) or "(none)"))
     if history:
-        entries = []
-        for number, entry in enumerate(history, 1):
-            left = _format_failures(entry.failures, HISTORY_FAILURES) or "(no errors left)"
-            said = entry.explanation.strip()
-            entries.append(f"Attempt {number}: {said}\nErrors after it:\n{left}")
-        parts.append("## Earlier attempts (they did not work)\n" + "\n\n".join(entries))
+        parts.append(_history_section(history))
     if review_comments:
         parts.append("## Reviewer comments\n" + "\n".join(f"- {c}" for c in review_comments))
-    blocks = [
-        f"### FILE {f.path} ({'full' if f.whole else 'excerpt'})\n{f.text}\n### END FILE"
-        for f in files
-    ]
-    parts.append("## Code\n" + ("\n\n".join(blocks) or "(no files could be read)"))
+    parts.append(_code_section(files))
     return [
         {"role": "system", "content": SYSTEM_PROMPT.format(language=language)},
         {"role": "user", "content": "\n\n".join(parts)},
@@ -143,14 +149,7 @@ def propose_patch(
         max_file_chars=loop.max_file_chars,
         excerpt_lines=loop.excerpt_lines,
     )
-    messages = build_messages(
-        files,
-        failures,
-        issue=issue,
-        history=history,
-        review_comments=review_comments,
-        language=language,
-    )
+    messages = build_messages(files, failures, issue, history, review_comments, language)
     try:
         patch = llm.complete(messages, Patch)
     except LLMInvalidAnswer as exc:

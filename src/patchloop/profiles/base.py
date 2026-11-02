@@ -31,10 +31,13 @@ class ProjectSetup:
 class LanguageProfile(Protocol):
     name: str
 
-    def detect(self, project: Path) -> bool: ...
+    def detect(self, project: Path) -> bool:
+        raise NotImplementedError
 
-    def setup(self, project: Path, config: Config) -> ProjectSetup: ...
+    def setup(self, project: Path, config: Config) -> ProjectSetup:
+        raise NotImplementedError
 
     def parse_check(
         self, stage: Literal["build", "lint", "tests"], result: ExecResult, tail_lines: int
-    ) -> CheckResult: ...
+    ) -> CheckResult:
+        raise NotImplementedError

@@ -22,8 +22,8 @@ from patchloop.checks import run_checks
 from patchloop.config import Config
 from patchloop.llm.client import LLMClient
 from patchloop.patching import apply_patch, make_diff, patch_hash, restore_files
-from patchloop.profiles import detect_profile
 from patchloop.profiles.base import LanguageProfile, ProjectSetup
+from patchloop.profiles.registry import detect_profile
 from patchloop.sandbox import ensure_image, make_workspace, remove_workspace
 from patchloop.schemas import Attempt, CheckResult, Failure, Patch, RunResult
 
@@ -135,7 +135,7 @@ class Engine:
         )
         if outcome.patch is None:  # a spent attempt: nothing to apply or check
             attempt = Attempt(index=len(attempts), patch_hash="")
-            note = HistoryEntry(f"(no usable answer: {outcome.error})", ())
+            note = HistoryEntry(f"(no usable answer: {outcome.error})", [])
             return {
                 "attempts": [*attempts, attempt],
                 "notes": [*notes, note],
@@ -162,7 +162,7 @@ class Engine:
             patch_hash=patch_hash(Patch(files=merged, explanation="")),
             checks=results,
         )
-        note = HistoryEntry(patch.explanation, tuple(all_failures(results)))
+        note = HistoryEntry(patch.explanation, all_failures(results))
         best = state["best"]
         threshold = score(attempts[best].checks if best is not None else state["original"])
         update: RunState = {"attempts": [*attempts, attempt], "notes": [*notes, note]}

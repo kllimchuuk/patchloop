@@ -1,8 +1,20 @@
+"""Parsers of compileall, ruff and pytest output, tested on real captured output.
+
+The files in `tests/fixtures/outputs/` are the unedited output of the tools run in the sandbox
+image on tiny throw-away projects (host paths replaced by `/work`), so the parsers are checked
+against the real format and not against text we wrote ourselves:
+- compile.txt: `python -m compileall -q .` on two files with a syntax error
+- ruff.txt: `ruff check --output-format=concise .` with several rule violations
+- pytest_fail.txt: `pytest -x -q` with one failing assertion; pytest_fail_all.txt: without `-x`
+- pytest_import.txt: a test module whose import fails (collection error)
+- pytest_syntax.txt: a collected module with a syntax error
+"""
+
 from pathlib import Path
 
 import pytest
 
-from patchloop.profiles import PythonProfile
+from patchloop.profiles.python import PythonProfile
 from patchloop.profiles.python_errors import parse_check, relative_path
 from patchloop.sandbox.runner import ExecResult
 

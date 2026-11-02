@@ -4,6 +4,7 @@ import posixpath
 import re
 import tomllib
 from pathlib import Path
+from typing import Literal
 
 from patchloop.config import Config
 from patchloop.profiles.base import ProfileError, ProjectSetup
@@ -11,6 +12,7 @@ from patchloop.profiles.python_errors import Stage, parse_check
 from patchloop.sandbox.runner import ExecResult
 from patchloop.schemas import CheckResult
 
+Variant = Literal["django", "fastapi", "generic"]
 MAX_MANIFEST_BYTES = 1_000_000
 GENERATED_REQUIREMENTS = ".patchloop/pyproject-requirements.txt"
 TEST_GROUPS = {"dev", "test", "tests", "testing"}  # extras that usually hold pytest and plugins
@@ -35,6 +37,19 @@ def _read(project: Path, relative: str) -> bytes | None:
     return path.read_bytes()
 
 
+def _included_files(name: str, content: bytes) -> list[str]:
+    """Files that a requirements file includes with -r, kept inside the project."""
+    included = []
+    for line in content.decode("utf-8", errors="replace").splitlines():
+        match = INCLUDE_RE.match(line)
+        if not match:
+            continue
+        path = posixpath.normpath(posixpath.join(posixpath.dirname(name), match.group(1)))
+        if not (path.startswith("..") or posixpath.isabs(path)):
+            included.append(path)
+    return included
+
+
 def _requirement_files(project: Path) -> dict[str, bytes]:
     """Top-level requirements*.txt plus the files they include with -r."""
     found: dict[str, bytes] = {}
@@ -44,16 +59,9 @@ def _requirement_files(project: Path) -> dict[str, bytes]:
         if name in found:
             continue
         content = _read(project, name)
-        if content is None:
-            continue
-        found[name] = content
-        for line in content.decode("utf-8", errors="replace").splitlines():
-            match = INCLUDE_RE.match(line)
-            if not match:
-                continue
-            included = posixpath.normpath(posixpath.join(posixpath.dirname(name), match.group(1)))
-            if not (included.startswith("..") or posixpath.isabs(included)):
-                queue.append(included)
+        if content is not None:
+            found[name] = content
+            queue += _included_files(name, content)
     return found
 
 
@@ -87,6 +95,31 @@ def _dependency_names(manifests: dict[str, bytes], generated: list[str]) -> set[
     return names
 
 
+def _add_pyproject_manifest(project: Path, manifests: dict[str, bytes]) -> list[str]:
+    """Put the pyproject.toml dependencies into `manifests` as a generated requirements file."""
+    pyproject = _read(project, "pyproject.toml")
+    generated = _pyproject_requirements(pyproject) if pyproject is not None else []
+    if generated:
+        manifests[GENERATED_REQUIREMENTS] = ("\n".join(generated) + "\n").encode()
+    return generated
+
+
+def _variant(project: Path, names: set[str]) -> tuple[Variant, dict[str, str], list[str]]:
+    """Framework variant, its environment and the extra tools to install next to pytest."""
+    env = dict(BASE_ENV)
+    tools = ["pytest", "ruff"]  # what the profile itself runs
+    manage = _read(project, "manage.py")
+    if manage is not None:
+        tools.append("pytest-django")
+        match = SETTINGS_RE.search(manage.decode("utf-8", errors="replace"))
+        if match:
+            env["DJANGO_SETTINGS_MODULE"] = match.group(1)
+        return "django", env, tools
+    if "fastapi" in names:
+        return "fastapi", env, [*tools, "httpx"]  # httpx is needed by fastapi.testclient
+    return "generic", env, tools
+
+
 class PythonProfile:
     name = "python"
 
@@ -97,28 +130,8 @@ class PythonProfile:
 
     def setup(self, project: Path, config: Config) -> ProjectSetup:
         manifests = _requirement_files(project)
-        generated: list[str] = []
-        pyproject = _read(project, "pyproject.toml")
-        if pyproject is not None:
-            generated = _pyproject_requirements(pyproject)
-            if generated:
-                manifests[GENERATED_REQUIREMENTS] = ("\n".join(generated) + "\n").encode()
-
-        names = _dependency_names(manifests, generated)
-        variant = "generic"
-        env = dict(BASE_ENV)
-        tools = ["pytest", "ruff"]  # what the profile itself runs
-        manage = _read(project, "manage.py")
-        if manage is not None:
-            variant = "django"
-            tools.append("pytest-django")
-            match = SETTINGS_RE.search(manage.decode("utf-8", errors="replace"))
-            if match:
-                env["DJANGO_SETTINGS_MODULE"] = match.group(1)
-        elif "fastapi" in names:
-            variant = "fastapi"
-            tools.append("httpx")  # needed by fastapi.testclient
-
+        generated = _add_pyproject_manifest(project, manifests)
+        variant, env, tools = _variant(project, _dependency_names(manifests, generated))
         files = [f"-r {name}" for name in sorted(manifests)]
         install = "pip install --no-cache-dir " + " ".join([*files, *tools])
         return ProjectSetup(

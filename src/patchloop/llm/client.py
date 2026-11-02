@@ -28,7 +28,7 @@ class LLMInvalidAnswer(LLMError):
 
 class LLMClient(Protocol):
     def complete(self, messages: Messages, schema: type[T]) -> T:
-        ...
+        raise NotImplementedError
 
 
 def _default_completion(**kwargs: Any) -> str:

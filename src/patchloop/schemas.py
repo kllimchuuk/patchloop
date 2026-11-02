@@ -45,7 +45,12 @@ class Patch(_Contract):
     @field_validator("files")
     @classmethod
     def _safe_paths(cls, files: dict[str, str]) -> dict[str, str]:
-        # Paths come from the model, so they are untrusted input.
+        """Reject unsafe paths at the contract itself, so no code can build a bad `Patch`.
+
+        The paths come from the model, which is untrusted input: a path like `../../x` or
+        `/etc/passwd` would let a patch write outside the project copy, and `.git` must stay
+        untouched. Checking here means every consumer (apply, diff, restore) gets safe paths.
+        """
         if not files:
             raise ValueError("patch must contain at least one file")
         for name in files:

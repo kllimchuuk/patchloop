@@ -41,28 +41,38 @@ def _exists(workdir: Path, relative: str) -> bool:
         return False
 
 
-def local_imports(workdir: Path, relative: str, text: str) -> list[str]:
-    """Project files imported by `text` (absolute and relative imports), without duplicates."""
-    try:
-        tree = ast.parse(text)
-    except (SyntaxError, ValueError):
-        return []
+def _imported_modules(tree: ast.AST, relative: str) -> list[str]:
+    """Dotted names of every module a parsed file may import, relative imports resolved."""
     package = relative.rsplit("/", 1)[0].replace("/", ".") if "/" in relative else ""
     modules: list[str] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             modules += [alias.name for alias in node.names]
         elif isinstance(node, ast.ImportFrom):
-            base = node.module or ""
-            if node.level:
-                parts = package.split(".") if package else []
-                parts = parts[: len(parts) - (node.level - 1)] if node.level > 1 else parts
-                base = ".".join([*parts, base] if base else parts)
+            base = _from_base(node, package)
             if base:
                 modules.append(base)
                 modules += [f"{base}.{alias.name}" for alias in node.names]  # "from pkg import mod"
+    return modules
+
+
+def _from_base(node: ast.ImportFrom, package: str) -> str:
+    base = node.module or ""
+    if not node.level:
+        return base
+    parts = package.split(".") if package else []
+    parts = parts[: len(parts) - (node.level - 1)] if node.level > 1 else parts
+    return ".".join([*parts, base] if base else parts)
+
+
+def local_imports(workdir: Path, relative: str, text: str) -> list[str]:
+    """Project files imported by `text` (absolute and relative imports), without duplicates."""
+    try:
+        tree = ast.parse(text)
+    except (SyntaxError, ValueError):
+        return []
     files: list[str] = []
-    for module in modules:
+    for module in _imported_modules(tree, relative):
         for path in _module_files(workdir, module):
             if path != relative and path not in files:
                 files.append(path)
@@ -95,6 +105,51 @@ def _excerpt(text: str, line: int | None, radius: int) -> str:
     return "\n".join(lines[start : start + 2 * radius + 1])
 
 
+def _read_or_none(workdir: Path, path: str) -> str | None:
+    try:
+        return read_text(workdir, path)
+    except PatchError:
+        return None
+
+
+def _read_candidates(workdir: Path, starts: list[str]) -> dict[str, str]:
+    """The start files and what they import (one level), in discovery order."""
+    texts: dict[str, str] = {}
+    for path in starts:
+        text = _read_or_none(workdir, path)
+        if text is None:
+            continue
+        texts[path] = text
+        for imported in local_imports(workdir, path, text):
+            content = None if imported in texts else _read_or_none(workdir, imported)
+            if content is not None:
+                texts[imported] = content
+    return texts
+
+
+def _fit_to_budget(
+    texts: dict[str, str],
+    lines: dict[str, int | None],
+    total_chars: int,
+    max_file_chars: int,
+    excerpt_lines: int,
+) -> list[ContextFile]:
+    result: list[ContextFile] = []
+    remaining = total_chars
+    for path in sorted(texts, key=_is_test):  # stable: source files first, in failure order
+        text = texts[path]
+        if len(text) <= max_file_chars and len(text) <= remaining:
+            result.append(ContextFile(path, text, whole=True))
+            remaining -= len(text)
+            continue
+        room = max(min(remaining, max_file_chars), 0)
+        excerpt = _excerpt(text, lines.get(path), excerpt_lines)[:room]
+        if excerpt:
+            result.append(ContextFile(path, excerpt, whole=False))
+            remaining -= len(excerpt)
+    return result
+
+
 def gather_context(
     workdir: Path,
     failures: list[Failure],
@@ -108,36 +163,6 @@ def gather_context(
     for failure in failures:
         if failure.file and failure.file not in lines:
             lines[failure.file] = failure.line
-    texts: dict[str, str] = {}
     # No failing file to start from (a bug description only): offer the project's own sources.
-    for path in list(lines) or project_sources(workdir):
-        try:
-            text = read_text(workdir, path)
-        except PatchError:
-            continue
-        if text is None:
-            continue
-        texts[path] = text
-        for imported in local_imports(workdir, path, text):
-            if imported not in texts:
-                try:
-                    content = read_text(workdir, imported)
-                except PatchError:
-                    continue
-                if content is not None:
-                    texts[imported] = content
-    ordered = sorted(texts, key=_is_test)  # stable: source files first, in failure order
-    result: list[ContextFile] = []
-    remaining = total_chars
-    for path in ordered:
-        text = texts[path]
-        if len(text) <= max_file_chars and len(text) <= remaining:
-            result.append(ContextFile(path, text, whole=True))
-            remaining -= len(text)
-            continue
-        room = max(min(remaining, max_file_chars), 0)
-        excerpt = _excerpt(text, lines.get(path), excerpt_lines)[:room]
-        if excerpt:
-            result.append(ContextFile(path, excerpt, whole=False))
-            remaining -= len(excerpt)
-    return result
+    texts = _read_candidates(workdir, list(lines) or project_sources(workdir))
+    return _fit_to_budget(texts, lines, total_chars, max_file_chars, excerpt_lines)

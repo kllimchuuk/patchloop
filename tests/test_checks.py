@@ -6,7 +6,8 @@ from fake_docker import FakeDocker
 from patchloop import checks
 from patchloop.checks import run_checks
 from patchloop.config import Config
-from patchloop.profiles import ProfileError, PythonProfile
+from patchloop.profiles.base import ProfileError
+from patchloop.profiles.python import PythonProfile
 from patchloop.sandbox.runner import ExecResult
 
 

@@ -6,7 +6,7 @@ import pytest
 
 from patchloop.checks import run_checks
 from patchloop.config import Config
-from patchloop.profiles import PythonProfile
+from patchloop.profiles.python import PythonProfile
 from patchloop.sandbox import ensure_image, workspace
 
 pytestmark = pytest.mark.docker

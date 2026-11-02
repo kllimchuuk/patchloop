@@ -3,8 +3,9 @@ import os
 import pytest
 
 from patchloop.config import Config
-from patchloop.profiles import ProfileError, PythonProfile, detect_profile
-from patchloop.profiles.python import GENERATED_REQUIREMENTS
+from patchloop.profiles.base import ProfileError
+from patchloop.profiles.python import GENERATED_REQUIREMENTS, PythonProfile
+from patchloop.profiles.registry import detect_profile
 
 
 def _project(root, files):

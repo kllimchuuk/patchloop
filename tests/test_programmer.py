@@ -31,7 +31,7 @@ def test_prompt_contains_failures_code_issue_history_and_comments(project):
     history = [
         HistoryEntry(
             "changed the sign",
-            (Failure(kind="test", file="pkg/calc.py", line=2, message="still wrong"),),
+            [Failure(kind="test", file="pkg/calc.py", line=2, message="still wrong")],
         )
     ]
     result = propose_patch(

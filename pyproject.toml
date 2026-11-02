@@ -29,7 +29,10 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-m 'not docker'"
-markers = ["docker: needs a running Docker daemon and a pulled base image (run with -m docker)"]
+markers = [
+    "docker: needs a running Docker daemon and a pulled base image (run with -m docker)",
+    "llm: needs a running Ollama with the configured model (run with -m \"docker and llm\")",
+]
 
 [tool.ruff]
 line-length = 100

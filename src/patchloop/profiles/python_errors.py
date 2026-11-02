@@ -48,37 +48,31 @@ def _tail(text: str, lines: int) -> str:
     return "\n".join(text.splitlines()[-lines:])
 
 
+def _compile_failure(name: str, block: list[str]) -> Failure:
+    line = next((int(m.group(2)) for ln in block if (m := COMPILE_LINE_RE.match(ln))), None)
+    message = next((ln for ln in reversed(block) if COMPILE_ERROR_RE.match(ln.strip())), None)
+    return Failure(
+        kind="build",
+        file=relative_path(name),
+        line=line if line and line >= 1 else None,
+        message=(message or "compilation failed").strip(),
+    )
+
+
 def parse_compileall(output: str) -> list[Failure]:
     failures: list[Failure] = []
     block: list[str] = []
     name = ""
-
-    def flush() -> None:
-        if not name:
-            return
-        line = next(
-            (int(m.group(2)) for ln in block if (m := COMPILE_LINE_RE.match(ln))), None
-        )
-        message = next(
-            (ln for ln in reversed(block) if COMPILE_ERROR_RE.match(ln.strip())), None
-        )
-        failures.append(
-            Failure(
-                kind="build",
-                file=relative_path(name),
-                line=line if line and line >= 1 else None,
-                message=(message or "compilation failed").strip(),
-            )
-        )
-
     for raw in output.splitlines():
         match = COMPILE_BLOCK_RE.match(raw)
         if match:
-            flush()
+            if name:
+                failures.append(_compile_failure(name, block))
             name, block = match.group(1), []
         elif name:
             block.append(raw)
-    flush()
+    if name:
+        failures.append(_compile_failure(name, block))
     return failures
 
 
@@ -132,40 +126,57 @@ def _locate(body: list[str]) -> tuple[str | None, int | None]:
     return None, None
 
 
+def _pytest_failure(
+    status: str, test_id: str, message: str | None, sections: dict[str, list[str]]
+) -> Failure:
+    path, _, name = test_id.partition("::")
+    heading = name.replace("::", ".") if name else f"ERROR collecting {path}"
+    body = sections.get(heading, [])
+    file, line = _locate(body)
+    if file is None:
+        file = relative_path(path) if path.endswith(".py") else None
+    if not message:
+        message = next(
+            (m.group(1) for ln in reversed(body) if (m := PYTEST_MESSAGE_RE.match(ln))),
+            f"{status.lower()} in {test_id}",
+        )
+    symbol = re.sub(r"\[.*\]$", "", name.rsplit("::", 1)[-1]) if name else None
+    return Failure(
+        kind="test",
+        file=file,
+        line=line if line and line >= 1 else None,
+        symbol=symbol or None,
+        message=message,
+    )
+
+
 def parse_pytest(output: str) -> tuple[list[Failure], int]:
     """Failures and the number of failed plus errored tests."""
     lines = output.splitlines()
     sections = _pytest_sections(lines)
-    failures: list[Failure] = []
-    for raw in lines:
-        match = PYTEST_SUMMARY_RE.match(raw)
-        if not match:
-            continue
-        status, test_id, message = match.groups()
-        path, _, name = test_id.partition("::")
-        heading = name.replace("::", ".") if name else f"ERROR collecting {path}"
-        body = sections.get(heading, [])
-        file, line = _locate(body)
-        if file is None:
-            file = relative_path(path) if path.endswith(".py") else None
-        if not message:
-            message = next(
-                (m.group(1) for ln in reversed(body) if (m := PYTEST_MESSAGE_RE.match(ln))),
-                f"{status.lower()} in {test_id}",
-            )
-        symbol = re.sub(r"\[.*\]$", "", name.rsplit("::", 1)[-1]) if name else None
-        failures.append(
-            Failure(
-                kind="test",
-                file=file,
-                line=line if line and line >= 1 else None,
-                symbol=symbol or None,
-                message=message,
-            )
-        )
+    failures = [
+        _pytest_failure(*match.groups(), sections)
+        for raw in lines
+        if (match := PYTEST_SUMMARY_RE.match(raw))
+    ]
     last = next((ln for ln in reversed(lines) if ln.strip()), "")  # "2 failed, 1 passed in 0.1s"
     count = sum(int(n) for n, _ in PYTEST_FINAL_RE.findall(last))
     return failures, count or len(failures)
+
+
+def _stage_failures(stage: Stage, output: str) -> tuple[list[Failure], int]:
+    """Failures of a failed stage and, for tests, the number of failing tests."""
+    if stage == "build":
+        return parse_compileall(output), 0
+    if stage == "lint":
+        return parse_ruff(output), 0
+    return parse_pytest(output)
+
+
+def _runtime_result(stage: Stage, result: ExecResult, tail: str) -> CheckResult:
+    reason = "timed out" if result.timed_out else "killed: out of memory"
+    failure = Failure(kind="runtime", message=f"{stage} {reason}", raw_tail=tail)
+    return CheckResult(stage=stage, passed=False, failures=[failure], duration_s=result.duration_s)
 
 
 def parse_check(stage: Stage, result: ExecResult, tail_lines: int) -> CheckResult:
@@ -173,22 +184,12 @@ def parse_check(stage: Stage, result: ExecResult, tail_lines: int) -> CheckResul
     output = result.stdout + ("\n" + result.stderr if result.stderr else "")
     tail = _tail(output, tail_lines)
     if result.timed_out or result.oom_killed:
-        reason = "timed out" if result.timed_out else "killed: out of memory"
-        failure = Failure(kind="runtime", message=f"{stage} {reason}", raw_tail=tail)
-        return CheckResult(
-            stage=stage, passed=False, failures=[failure], duration_s=result.duration_s
-        )
-
+        return _runtime_result(stage, result, tail)
     passed = result.exit_code == 0 or (stage == "tests" and result.exit_code == PYTEST_NO_TESTS)
     failures: list[Failure] = []
     failing = 0
     if not passed:
-        if stage == "build":
-            failures = parse_compileall(output)
-        elif stage == "lint":
-            failures = parse_ruff(output)
-        else:
-            failures, failing = parse_pytest(output)
+        failures, failing = _stage_failures(stage, output)
         if not failures:
             message = f"{stage} failed with exit code {result.exit_code}"
             failures = [Failure(kind=KIND[stage], message=message, raw_tail=tail)]
