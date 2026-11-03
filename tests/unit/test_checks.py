@@ -1,7 +1,8 @@
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from fake_docker import FakeDocker
+from support.fake_docker import FakeDocker
 
 from patchloop import checks
 from patchloop.checks import run_checks
@@ -76,8 +77,7 @@ def test_commands_come_from_the_override(tmp_path, monkeypatch):
 @pytest.mark.parametrize("bad", ["pytest 'unclosed", "   "])
 def test_unusable_command_is_a_clear_error(tmp_path, monkeypatch, bad):
     monkeypatch.setattr(checks, "run_in_sandbox", Script({}))
-    setup = _setup(tmp_path)
-    object.__setattr__(setup, "test", bad)  # ProjectSetup is frozen; simulate a bad override
+    setup = replace(_setup(tmp_path), test=bad)  # a bad command, as from a broken override
     with pytest.raises(ProfileError):
         run_checks(None, Config(), PythonProfile(), setup, "img:1", tmp_path)
 

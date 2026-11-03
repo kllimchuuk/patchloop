@@ -7,7 +7,6 @@ import json
 import time
 import urllib.request
 
-import docker
 import pytest
 
 from patchloop.config import Config
@@ -15,16 +14,6 @@ from patchloop.graph import run_fix
 from patchloop.llm.client import LiteLLMClient
 
 pytestmark = [pytest.mark.docker, pytest.mark.llm]
-
-
-@pytest.fixture(scope="module")
-def docker_client():
-    try:
-        c = docker.from_env()
-        c.ping()
-    except docker.errors.DockerException as exc:
-        pytest.skip(f"Docker is not available: {exc}")
-    return c
 
 
 @pytest.fixture(scope="module")
@@ -41,23 +30,8 @@ def config():
     return cfg
 
 
-def _project(root):
-    (root / "pkg").mkdir(parents=True)
-    (root / "tests").mkdir()
-    (root / "requirements.txt").write_text("", encoding="utf-8")
-    (root / "pkg" / "__init__.py").write_text("", encoding="utf-8")
-    (root / "pkg" / "calc.py").write_text(
-        "def add(a, b):\n    return a - b\n", encoding="utf-8"
-    )
-    (root / "tests" / "test_calc.py").write_text(
-        "from pkg.calc import add\n\n\ndef test_add():\n    assert add(1, 2) == 3\n",
-        encoding="utf-8",
-    )
-    return root
-
-
-def test_one_line_bug_with_real_model(docker_client, config, tmp_path):
-    project = _project(tmp_path / "proj")
+def test_one_line_bug_with_real_model(docker_client, config, buggy_project):
+    project = buggy_project
     llm = LiteLLMClient(config.llm)
     started = time.monotonic()
     result = run_fix(project, config, llm, docker_client)

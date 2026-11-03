@@ -1,4 +1,5 @@
 import pytest
+from support.projects import BUGGY_CALC, write_files
 
 from patchloop.config import Config, LlmConfig
 from patchloop.graph import Engine
@@ -25,14 +26,14 @@ class Harness:
     """A project whose check results depend only on the content of pkg/calc.py."""
 
     def __init__(self, tmp_path, rules, config=None, issue=None, answers=(), llm=None):
-        self.project = tmp_path / "proj"
-        (self.project / "pkg").mkdir(parents=True)
-        (self.project / "tests").mkdir()
-        (self.project / "requirements.txt").write_text("", encoding="utf-8")
-        (self.project / "tests" / "test_calc.py").write_text(
-            "from pkg.calc import add\n\n\ndef test_a():\n    assert add(1, 2) == 3\n"
+        self.project = write_files(
+            tmp_path / "proj",
+            {
+                "requirements.txt": "",
+                "tests/test_calc.py": BUGGY_CALC["tests/test_calc.py"],
+                SOURCE: "bug",
+            },
         )
-        (self.project / SOURCE).write_text("bug", encoding="utf-8")
         self.rules, self.issue, self.time = rules, issue, 0.0
         self.llm = llm or FakeLLMClient([self._patch(a) for a in answers])
         self.config = config or Config()

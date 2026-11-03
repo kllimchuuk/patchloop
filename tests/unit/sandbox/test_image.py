@@ -1,5 +1,5 @@
 import pytest
-from fake_docker import FakeDocker
+from support.fake_docker import FakeDocker
 
 from patchloop.config import SandboxConfig
 from patchloop.sandbox import SandboxError, ensure_image

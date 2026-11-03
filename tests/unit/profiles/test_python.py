@@ -1,6 +1,7 @@
 import os
 
 import pytest
+from support.projects import write_files
 
 from patchloop.config import Config
 from patchloop.profiles.base import ProfileError
@@ -8,28 +9,19 @@ from patchloop.profiles.python import GENERATED_REQUIREMENTS, PythonProfile
 from patchloop.profiles.registry import detect_profile
 
 
-def _project(root, files):
-    for name, content in files.items():
-        path = root / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
-    return root
-
-
 def _setup(root, files, **overrides):
-    config = Config(**overrides)
-    return PythonProfile().setup(_project(root, files), config)
+    return PythonProfile().setup(write_files(root, files), Config(**overrides))
 
 
 def test_detects_python_by_manifest_or_source(tmp_path):
-    assert detect_profile(_project(tmp_path / "a", {"requirements.txt": ""})).name == "python"
-    assert detect_profile(_project(tmp_path / "b", {"pyproject.toml": ""})).name == "python"
-    assert detect_profile(_project(tmp_path / "c", {"main.py": "x = 1\n"})).name == "python"
+    assert detect_profile(write_files(tmp_path / "a", {"requirements.txt": ""})).name == "python"
+    assert detect_profile(write_files(tmp_path / "b", {"pyproject.toml": ""})).name == "python"
+    assert detect_profile(write_files(tmp_path / "c", {"main.py": "x = 1\n"})).name == "python"
 
 
 def test_unknown_project_is_an_error(tmp_path):
     with pytest.raises(ProfileError):
-        detect_profile(_project(tmp_path, {"README.md": "hi"}))
+        detect_profile(write_files(tmp_path, {"README.md": "hi"}))
 
 
 def test_generic_project_defaults(tmp_path):
@@ -102,13 +94,9 @@ def test_requirements_includes_are_followed_inside_the_project_only(tmp_path):
 def test_symlinked_manifest_is_ignored(tmp_path):
     secret = tmp_path / "secret.txt"
     secret.write_text("TOKEN\n", encoding="utf-8")
-    project = _project(tmp_path / "p", {"main.py": ""})
+    project = write_files(tmp_path / "p", {"main.py": ""})
     os.symlink(secret, project / "requirements.txt")
-    assert _setup_manifests(project) == {}
-
-
-def _setup_manifests(project):
-    return PythonProfile().setup(project, Config()).manifests
+    assert PythonProfile().setup(project, Config()).manifests == {}
 
 
 def test_patchloop_yml_overrides_win(tmp_path):

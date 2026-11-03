@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from patchloop.patching import PatchError, apply_patch, make_diff, patch_hash
+from patchloop.patching import PatchError, apply_patch, make_diff, patch_hash, restore_files
 from patchloop.schemas import Patch
 
 
@@ -54,18 +54,27 @@ def test_lone_surrogate_is_not_valid_text(tmp_path):
         apply_patch(tmp_path, Patch(files={"a.py": "\ud800"}, explanation="e"))
 
 
-def test_hash_ignores_order_and_explanation_but_not_content_or_split():
+def test_hash_ignores_file_order_and_explanation():
     a = Patch(files={"a.py": "1", "b.py": "2"}, explanation="one")
     b = Patch(files={"b.py": "2", "a.py": "1"}, explanation="two")
     assert patch_hash(a) == patch_hash(b)
-    assert patch_hash(a) != patch_hash(Patch(files={"a.py": "1", "b.py": "3"}, explanation="x"))
-    assert patch_hash(Patch(files={"a": "bc"}, explanation="x")) != patch_hash(
-        Patch(files={"ab": "c"}, explanation="x")
-    )
     assert len(patch_hash(a)) == 64
 
 
+def test_hash_changes_with_content():
+    a = Patch(files={"a.py": "1"}, explanation="x")
+    b = Patch(files={"a.py": "2"}, explanation="x")
+    assert patch_hash(a) != patch_hash(b)
+
+
+def test_hash_does_not_confuse_where_a_name_ends_and_content_starts():
+    a = Patch(files={"a": "bc"}, explanation="x")
+    b = Patch(files={"ab": "c"}, explanation="x")
+    assert patch_hash(a) != patch_hash(b)
+
+
 def _trees(tmp_path):
+    """An original tree and a changed copy of it, both empty."""
     original, changed = tmp_path / "orig", tmp_path / "work"
     original.mkdir()
     changed.mkdir()
@@ -99,21 +108,23 @@ def test_missing_final_newline_is_marked(tmp_path):
     assert diff.endswith("-a\n\\ No newline at end of file\n+b\n\\ No newline at end of file\n")
 
 
-def test_diff_refuses_symlinks_and_binary_files(tmp_path):
+def test_diff_refuses_symlinks(tmp_path):
     original, changed = _trees(tmp_path)
     secret = tmp_path / "secret.txt"
     secret.write_text("token\n", encoding="utf-8")
     os.symlink(secret, changed / "a.py")
     with pytest.raises(PatchError, match="symlink"):
         make_diff(original, changed, ["a.py"])
+
+
+def test_diff_refuses_binary_files(tmp_path):
+    original, changed = _trees(tmp_path)
     (changed / "b.bin").write_bytes(b"\xff\xfe\x00")
     with pytest.raises(PatchError, match="UTF-8"):
         make_diff(original, changed, ["b.bin"])
 
 
 def test_restore_puts_files_back_and_removes_new_ones(tmp_path):
-    from patchloop.patching import restore_files
-
     original, work = _trees(tmp_path)
     (original / "a.py").write_text("old\n", encoding="utf-8")
     (work / "a.py").write_text("patched\n", encoding="utf-8")
@@ -125,8 +136,6 @@ def test_restore_puts_files_back_and_removes_new_ones(tmp_path):
 
 
 def test_restore_replaces_a_symlink_without_touching_its_target(tmp_path):
-    from patchloop.patching import restore_files
-
     original, work = _trees(tmp_path)
     secret = tmp_path / "secret.txt"
     secret.write_text("keep\n", encoding="utf-8")
@@ -138,8 +147,6 @@ def test_restore_replaces_a_symlink_without_touching_its_target(tmp_path):
 
 
 def test_restore_refuses_a_symlinked_directory(tmp_path):
-    from patchloop.patching import restore_files
-
     original, work = _trees(tmp_path)
     outside = tmp_path / "outside"
     outside.mkdir()

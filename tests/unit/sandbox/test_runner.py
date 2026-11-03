@@ -1,8 +1,8 @@
 from pathlib import Path
 
 import pytest
-from fake_docker import FakeDocker, api_error, wait_timeout
 from requests.exceptions import ConnectionError
+from support.fake_docker import FakeDocker, api_error, wait_timeout
 
 from patchloop.config import SandboxConfig
 from patchloop.sandbox import SandboxError, run_in_sandbox

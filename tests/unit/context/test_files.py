@@ -1,16 +1,11 @@
 import os
 
+from support.projects import write_files
+
 from patchloop.context.files import gather_context, local_imports
 from patchloop.schemas import Failure
 
 LIMITS = {"total_chars": 10_000, "max_file_chars": 1_000, "excerpt_lines": 2}
-
-
-def _write(root, files):
-    for name, text in files.items():
-        path = root / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
 
 
 def _fail(file, line=None):
@@ -18,7 +13,7 @@ def _fail(file, line=None):
 
 
 def test_imports_of_the_failing_test_are_followed_and_source_comes_first(tmp_path):
-    _write(
+    write_files(
         tmp_path,
         {
             "pkg/__init__.py": "",
@@ -32,7 +27,7 @@ def test_imports_of_the_failing_test_are_followed_and_source_comes_first(tmp_pat
 
 
 def test_import_forms(tmp_path):
-    _write(
+    write_files(
         tmp_path,
         {
             "pkg/__init__.py": "",
@@ -67,7 +62,7 @@ def test_missing_and_symlinked_files_are_skipped(tmp_path):
     secret = tmp_path / "secret.py"
     secret.write_text("TOKEN = 1\n", encoding="utf-8")
     work = tmp_path / "work"
-    _write(work, {"ok.py": "x = 1\n"})
+    write_files(work, {"ok.py": "x = 1\n"})
     os.symlink(secret, work / "link.py")
     files = gather_context(
         work, [_fail("gone.py"), _fail("link.py"), _fail("ok.py"), _fail(None)], **LIMITS
@@ -77,14 +72,14 @@ def test_missing_and_symlinked_files_are_skipped(tmp_path):
 
 def test_big_file_becomes_an_excerpt_around_the_failing_line(tmp_path):
     text = "".join(f"line {i}\n" for i in range(1, 400))
-    _write(tmp_path, {"big.py": text})
+    write_files(tmp_path, {"big.py": text})
     (f,) = gather_context(tmp_path, [_fail("big.py", 200)], **LIMITS)
     assert not f.whole
     assert f.text.splitlines() == [f"line {i}" for i in range(198, 203)]
 
 
 def test_budget_is_respected(tmp_path):
-    _write(tmp_path, {"a.py": "a" * 600, "b.py": "b" * 600})
+    write_files(tmp_path, {"a.py": "a" * 600, "b.py": "b" * 600})
     limits = {**LIMITS, "total_chars": 900}
     files = gather_context(tmp_path, [_fail("a.py"), _fail("b.py")], **limits)
     assert [(f.path, f.whole) for f in files] == [("a.py", True), ("b.py", False)]

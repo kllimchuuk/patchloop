@@ -28,6 +28,7 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["tests"]
 addopts = "-m 'not docker'"
 markers = [
     "docker: needs a running Docker daemon and a pulled base image (run with -m docker)",

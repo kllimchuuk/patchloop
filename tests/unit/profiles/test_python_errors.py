@@ -18,7 +18,7 @@ from patchloop.profiles.python import PythonProfile
 from patchloop.profiles.python_errors import parse_check, relative_path
 from patchloop.sandbox.runner import ExecResult
 
-OUTPUTS = Path(__file__).parent / "fixtures" / "outputs"
+OUTPUTS = Path(__file__).parents[2] / "fixtures" / "outputs"
 
 
 def _run(stage, name, exit_code=1, **extra):
