@@ -1,0 +1,16 @@
+
+==================================== ERRORS ====================================
+________________________ ERROR collecting t/test_imp.py ________________________
+ImportError while importing test module '/work/t/test_imp.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+t/test_imp.py:1: in <module>
+    import nothere
+E   ModuleNotFoundError: No module named 'nothere'
+=========================== short test summary info ============================
+ERROR t/test_imp.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 error in 0.03s

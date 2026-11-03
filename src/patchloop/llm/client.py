@@ -22,9 +22,13 @@ class LLMError(RuntimeError):
     """The model is unreachable or did not produce a valid answer."""
 
 
+class LLMInvalidAnswer(LLMError):
+    """The model answered, but twice without valid output: this attempt is lost, not the run."""
+
+
 class LLMClient(Protocol):
     def complete(self, messages: Messages, schema: type[T]) -> T:
-        ...
+        raise NotImplementedError
 
 
 def _default_completion(**kwargs: Any) -> str:
@@ -73,7 +77,7 @@ class LiteLLMClient:
             if self.cache is not None:
                 self.cache.put(key, answer.model_dump_json())
             return answer
-        raise LLMError(f"the model returned an invalid answer twice: {last_error}")
+        raise LLMInvalidAnswer(f"the model returned an invalid answer twice: {last_error}")
 
     def _call(self, messages: Messages, schema: type[T], json_schema: dict) -> str:
         try:

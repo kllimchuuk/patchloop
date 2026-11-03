@@ -26,7 +26,7 @@ class LlmConfig(_Section):
 
 
 class SandboxConfig(_Section):
-    base_image: str = "python:3.12"
+    base_image: str = "python:3.12-slim"
     image_repository: str = "patchloop-env"  # prepared images are tagged <repository>:<hash>
     user: str | None = Field(None, pattern=r"^\d+(:\d+)?$")  # "uid[:gid]"; None = the host user
     memory_mb: int = Field(1024, ge=64)
@@ -42,11 +42,27 @@ class SandboxConfig(_Section):
     copy_env: bool = False  # copy the project's .env into the sandbox (it may hold real secrets)
 
 
+class LoopConfig(_Section):
+    total_timeout_s: float = Field(1800.0, gt=0)  # whole run, not one container (SPEC §8)
+    tail_lines: int = Field(40, ge=5)  # lines of raw output kept when the parser finds nothing
+    context_chars: int = Field(24_000, ge=2000)  # code shown to the Programmer in one prompt
+    max_file_chars: int = Field(12_000, ge=500)  # a bigger file is shown as an excerpt only
+    excerpt_lines: int = Field(40, ge=5)  # lines on each side of the failing line in an excerpt
+
+
 class Config(_Section):
     language: str = "en"  # language of explanations returned by the system
     max_attempts: int = Field(4, ge=1, le=10)  # Programmer attempts (SPEC §8)
     llm: LlmConfig = LlmConfig()
     sandbox: SandboxConfig = SandboxConfig()
+    loop: LoopConfig = LoopConfig()
+    # Per-project overrides of the language profile defaults (SPEC §6); None = keep the default.
+    image: str | None = None
+    install: str | None = None
+    build: str | None = None
+    test: str | None = None
+    lint: str | None = None
+    env: dict[str, str] = {}  # only these variables reach the container, never the host's
 
 
 class ConfigError(ValueError):

@@ -1,0 +1,12 @@
+*** Error compiling './bad.py'...
+  File "./bad.py", line 1
+    def f(:
+          ^
+SyntaxError: invalid syntax
+
+*** Error compiling './t/test_syn.py'...
+  File "./t/test_syn.py", line 1
+    def f(:
+          ^
+SyntaxError: invalid syntax
+
