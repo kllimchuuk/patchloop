@@ -4,7 +4,7 @@ from support.projects import BUGGY_CALC, write_files
 from patchloop.config import Config, LlmConfig
 from patchloop.graph import Engine
 from patchloop.llm.client import FakeLLMClient, LiteLLMClient, LLMError
-from patchloop.schemas import CheckResult, Failure, Patch
+from patchloop.schemas import CheckResult, Failure, Patch, TestPlan
 
 SOURCE = "pkg/calc.py"
 
@@ -25,16 +25,23 @@ def checks(n: int, tag: str = "x", build: bool = True) -> list[CheckResult]:
 class Harness:
     """A project whose check results depend only on the content of pkg/calc.py."""
 
-    def __init__(self, tmp_path, rules, config=None, issue=None, answers=(), llm=None):
-        self.project = write_files(
-            tmp_path / "proj",
-            {
-                "requirements.txt": "",
-                "tests/test_calc.py": BUGGY_CALC["tests/test_calc.py"],
-                SOURCE: "bug",
-            },
-        )
+    def __init__(
+        self,
+        tmp_path,
+        rules,
+        config=None,
+        issue=None,
+        answers=(),
+        llm=None,
+        test_file=None,
+        with_tests=True,
+    ):
+        files = {"requirements.txt": "", SOURCE: "bug"}
+        if with_tests:
+            files["tests/test_calc.py"] = BUGGY_CALC["tests/test_calc.py"]
+        self.project = write_files(tmp_path / "proj", files)
         self.rules, self.issue, self.time = rules, issue, 0.0
+        self.test_file, self.seen_tests = test_file, []  # test_file(calc, test) -> CheckResult
         self.llm = llm or FakeLLMClient([self._patch(a) for a in answers])
         self.config = config or Config()
         self.engine = Engine(
@@ -44,16 +51,25 @@ class Harness:
             docker=None,
             clock=lambda: self.time,
             checks_fn=self._checks,
+            test_file_fn=self._run_test_file,
             image_fn=lambda *args: "img:1",
         )
 
     @staticmethod
     def _patch(content):
+        if isinstance(content, TestPlan | Patch):
+            return content
         return Patch(files={SOURCE: content}, explanation=f"wrote {content}")
 
     def _checks(self, docker, config, profile, setup, image, work):
         self.time += 60  # every check run takes a minute of fake time
         return self.rules[(work / SOURCE).read_text(encoding="utf-8")]
+
+    def _run_test_file(self, docker, config, profile, setup, image, work, path):
+        self.time += 60
+        test = (work / path).read_text(encoding="utf-8")
+        self.seen_tests.append((path, test))
+        return self.test_file((work / SOURCE).read_text(encoding="utf-8"), test)
 
     def run(self):
         result = self.engine.run(self.issue)
@@ -140,12 +156,22 @@ def test_no_bugs_found_without_calling_the_model(tmp_path):
     assert h.llm.calls == []
 
 
-def test_an_issue_with_passing_checks_is_a_reduced_reliability_fix(tmp_path):
+def test_an_issue_with_passing_checks_and_no_reproducing_test_is_a_reduced_reliability_fix(
+    tmp_path,
+):
     rules = {"bug": checks(0), "ok": checks(0)}
-    h = Harness(tmp_path, rules, issue="add() is wrong", answers=["ok"])
+    plan = TestPlan(content="def test_x(): pass\n", explanation="x")
+    h = Harness(
+        tmp_path,
+        rules,
+        Config(max_test_attempts=2),
+        issue="add() is wrong",
+        answers=[plan, plan, "ok"],
+        test_file=lambda calc, test: checks(0)[2],  # the test passes on the original: no repro
+    )
     result = h.run()
     assert (result.status, result.best_attempt, result.reliability) == ("fixed", 0, "reduced")
-    prompt = h.llm.calls[0][1]["content"]
+    prompt = h.llm.calls[2][1]["content"]
     assert "add() is wrong" in prompt and "### FILE pkg/calc.py (full)" in prompt
 
 

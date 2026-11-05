@@ -7,6 +7,7 @@ from patchloop.config import Config
 from patchloop.profiles.base import ProfileError
 from patchloop.profiles.python import GENERATED_REQUIREMENTS, PythonProfile
 from patchloop.profiles.registry import detect_profile
+from patchloop.schemas import CheckResult, Failure
 
 
 def _setup(root, files, **overrides):
@@ -120,3 +121,37 @@ def test_patchloop_yml_overrides_win(tmp_path):
     assert setup.env["SECRET_KEY"] == "test"
     assert setup.env["PYTHONPATH"] == "/work"
     assert setup.env["PYTHONDONTWRITEBYTECODE"] == "1"
+
+
+def _run(*failures, passed=False):
+    return CheckResult(stage="tests", passed=passed, failures=list(failures), failing_tests=1)
+
+
+def _fail(message, symbol="test_a", kind="test"):
+    return Failure(kind=kind, file="tests/test_g.py", line=3, symbol=symbol, message=message)
+
+
+@pytest.mark.parametrize(
+    ("result", "verdict"),
+    [
+        (CheckResult(stage="tests", passed=True), "passes"),
+        (_run(_fail("assert -1 == 3")), "reproduces"),
+        (_run(_fail("AssertionError: assert 1 == 2")), "reproduces"),
+        (_run(_fail("ZeroDivisionError: division by zero")), "reproduces"),  # the bug itself
+        (_run(_fail("ModuleNotFoundError: No module named 'x'", symbol=None)), "broken"),
+        (_run(_fail("ImportError: cannot import name 'f'")), "broken"),
+        (_run(_fail("NameError: name 'y' is not defined")), "broken"),
+        (_run(_fail("SyntaxError: invalid syntax", symbol=None)), "broken"),
+        (_run(_fail("tests timed out", kind="runtime", symbol=None)), "broken"),
+        (_run(_fail("tests failed with exit code 2", symbol=None)), "broken"),  # unparsed output
+    ],
+)
+def test_a_generated_test_run_is_classified(result, verdict):
+    assert PythonProfile().classify_test_run(result) == verdict
+
+
+def test_test_command_for_one_file_is_quoted(tmp_path):
+    setup = _setup(tmp_path, {"requirements.txt": ""})
+    profile = PythonProfile()
+    assert profile.test_file_command(setup, "tests/test_g.py").endswith(" tests/test_g.py")
+    assert profile.test_file_command(setup, "a b.py").endswith(" 'a b.py'")

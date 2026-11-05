@@ -99,6 +99,11 @@ def _is_test(path: str) -> bool:
     return in_tests or named
 
 
+def has_tests(workdir: Path) -> bool:
+    """Whether the project has any test file (a lone `conftest.py` is not a test)."""
+    return any(_is_test(p) and not p.endswith("conftest.py") for p in project_sources(workdir))
+
+
 def _excerpt(text: str, line: int | None, radius: int) -> str:
     lines = text.splitlines()
     start = max((line or 1) - 1 - radius, 0)

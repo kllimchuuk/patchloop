@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from patchloop.schemas import SCHEMA_VERSION, Failure, Patch, RunResult
+from patchloop.schemas import SCHEMA_VERSION, Failure, Patch, RunResult, TestPlan
 
 
 def test_round_trip():
@@ -60,3 +60,11 @@ def test_patch_rejects_empty_files():
 def test_patch_accepts_nested_relative_path():
     patch = Patch(files={"src/pkg/a.py": "x = 1\n"}, explanation="e")
     assert list(patch.files) == ["src/pkg/a.py"]
+
+
+def test_a_test_plan_needs_content():
+    assert TestPlan(content="def test_x(): ...\n", explanation="e").content
+    with pytest.raises(ValidationError):
+        TestPlan(content="  \n", explanation="e")
+    with pytest.raises(ValidationError):
+        TestPlan(content="x", explanation="e", path="tests/test_x.py")  # code picks the path

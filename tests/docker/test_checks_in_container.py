@@ -3,7 +3,7 @@ for the first image build (pip install)."""
 
 import pytest
 
-from patchloop.checks import run_checks
+from patchloop.checks import run_checks, run_test_file
 from patchloop.config import Config
 from patchloop.profiles.python import PythonProfile
 from patchloop.sandbox import ensure_image, workspace
@@ -35,3 +35,27 @@ def test_buggy_project_fails_on_the_test_and_a_fix_passes(docker_client, buggy_p
         after = run_checks(docker_client, config, profile, setup, image, work)
         assert all(r.passed for r in after)
     assert (project / "pkg" / "calc.py").read_text(encoding="utf-8").endswith("a - b\n")
+
+
+def test_generated_tests_are_classified_in_a_container(docker_client, buggy_project, tmp_path):
+    config = Config()
+    profile = PythonProfile()
+    setup = profile.setup(buggy_project, config)
+    image = ensure_image(docker_client, config.sandbox, setup.manifests, setup.install)
+    generated = {
+        "tests/test_gen_repro.py": (
+            "from pkg.calc import add\n\n\ndef test_neg():\n    assert add(-1, -2) == -3\n",
+            "reproduces",
+        ),
+        "tests/test_gen_ok.py": (
+            "from pkg.calc import add\n\n\ndef test_add_zero():\n    assert add(0, 0) == 0\n",
+            "passes",
+        ),
+        "tests/test_gen_import.py": ("from pkg.nope import add\n", "broken"),
+        "tests/test_gen_syntax.py": ("def test_x(:\n", "broken"),
+    }
+    with workspace(buggy_project, parent=tmp_path) as work:
+        for path, (text, expected) in generated.items():
+            (work / path).write_text(text, encoding="utf-8")
+            result = run_test_file(docker_client, config, profile, setup, image, work, path)
+            assert profile.classify_test_run(result) == expected, (path, result)

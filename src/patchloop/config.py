@@ -53,6 +53,7 @@ class LoopConfig(_Section):
 class Config(_Section):
     language: str = "en"  # language of explanations returned by the system
     max_attempts: int = Field(4, ge=1, le=10)  # Programmer attempts (SPEC §8)
+    max_test_attempts: int = Field(3, ge=1, le=3)  # Tester attempts, then on without a test (§9)
     llm: LlmConfig = LlmConfig()
     sandbox: SandboxConfig = SandboxConfig()
     loop: LoopConfig = LoopConfig()

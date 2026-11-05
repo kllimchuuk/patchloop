@@ -4,7 +4,7 @@ The model only proposes. What happens next (apply, re-check, stop, roll back) is
 in the graph. All prompt text of this agent is in this file.
 """
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -81,7 +81,7 @@ def _history_section(history: Sequence[HistoryEntry]) -> str:
     return "## Earlier attempts (they did not work)\n" + "\n\n".join(entries)
 
 
-def _code_section(files: Sequence[ContextFile]) -> str:
+def code_section(files: Sequence[ContextFile]) -> str:
     blocks = [
         f"### FILE {f.path} ({'full' if f.whole else 'excerpt'})\n{f.text}\n### END FILE"
         for f in files
@@ -105,18 +105,22 @@ def build_messages(
         parts.append(_history_section(history))
     if review_comments:
         parts.append("## Reviewer comments\n" + "\n".join(f"- {c}" for c in review_comments))
-    parts.append(_code_section(files))
+    parts.append(code_section(files))
     return [
         {"role": "system", "content": SYSTEM_PROMPT.format(language=language)},
         {"role": "user", "content": "\n\n".join(parts)},
     ]
 
 
-def _check_patch(workdir: Path, patch: Patch, files: Sequence[ContextFile]) -> str | None:
+def _check_patch(
+    workdir: Path, patch: Patch, files: Sequence[ContextFile], protected: Collection[str]
+) -> str | None:
     """Why the patch must not be applied, or None. The model never overwrites unseen code."""
     full = {f.path for f in files if f.whole}
     changed = False
     for path, content in patch.files.items():
+        if path in protected:
+            return f"the patch changes {path}, a generated test that must not be edited"
         try:
             current = read_text(workdir, path)
         except PatchError as exc:
@@ -137,6 +141,7 @@ def propose_patch(
     history: Sequence[HistoryEntry] = (),
     review_comments: Sequence[str] = (),
     language: str = "en",
+    protected: Collection[str] = (),
 ) -> ProgrammerResult:
     """Ask the model for a fix. An unusable answer is a spent attempt, not a crash.
 
@@ -154,5 +159,5 @@ def propose_patch(
         patch = llm.complete(messages, Patch)
     except LLMInvalidAnswer as exc:
         return ProgrammerResult(None, str(exc))
-    problem = _check_patch(workdir, patch, files)
+    problem = _check_patch(workdir, patch, files, protected)
     return ProgrammerResult(None, problem) if problem else ProgrammerResult(patch)

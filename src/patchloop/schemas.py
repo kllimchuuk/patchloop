@@ -65,6 +65,22 @@ class Patch(_Contract):
         return files
 
 
+class TestPlan(_Contract):
+    """Tester output: the content of ONE new test file; its path is chosen by code."""
+
+    __test__ = False  # not a pytest class, despite the name
+
+    content: str
+    explanation: str
+
+    @field_validator("content")
+    @classmethod
+    def _not_blank(cls, content: str) -> str:
+        if not content.strip():
+            raise ValueError("the test file must not be empty")
+        return content
+
+
 class Review(_Contract):
     """Reviewer output."""
 
