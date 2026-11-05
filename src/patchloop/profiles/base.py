@@ -28,8 +28,13 @@ class ProjectSetup:
     env: dict[str, str] = field(default_factory=dict)
 
 
+TestVerdict = Literal["reproduces", "passes", "broken"]
+
+
 class LanguageProfile(Protocol):
     name: str
+    test_framework: str  # named in the Tester prompt
+    generated_test_path: str  # where the Tester's file goes; always a new file
 
     def detect(self, project: Path) -> bool:
         raise NotImplementedError
@@ -40,4 +45,13 @@ class LanguageProfile(Protocol):
     def parse_check(
         self, stage: Literal["build", "lint", "tests"], result: ExecResult, tail_lines: int
     ) -> CheckResult:
+        raise NotImplementedError
+
+    def test_file_command(self, setup: ProjectSetup, path: str) -> str:
+        """The test command narrowed to one file."""
+        raise NotImplementedError
+
+    def classify_test_run(self, result: CheckResult) -> TestVerdict:
+        """`reproduces`: fails the way a test of a bug should; `passes`; `broken`: the test
+        itself is wrong (import or syntax error, timeout, unparsed output), not the code."""
         raise NotImplementedError

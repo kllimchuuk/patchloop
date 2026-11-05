@@ -2,18 +2,29 @@
 
 import posixpath
 import re
+import shlex
 import tomllib
 from pathlib import Path
 from typing import Literal
 
 from patchloop.config import Config
-from patchloop.profiles.base import ProfileError, ProjectSetup
+from patchloop.profiles.base import ProfileError, ProjectSetup, TestVerdict
 from patchloop.profiles.python_errors import Stage, parse_check
 from patchloop.sandbox.runner import ExecResult
 from patchloop.schemas import CheckResult
 
 Variant = Literal["django", "fastapi", "generic"]
 MAX_MANIFEST_BYTES = 1_000_000
+# A failing generated test is a reproduction only if it fails inside the test body. These
+# exceptions mean that the test itself is wrong (or cannot be collected).
+BROKEN_TEST_ERRORS = (
+    "ImportError",
+    "ModuleNotFoundError",
+    "SyntaxError",
+    "IndentationError",
+    "NameError",
+    "fixture ",
+)
 GENERATED_REQUIREMENTS = ".patchloop/pyproject-requirements.txt"
 TEST_GROUPS = {"dev", "test", "tests", "testing"}  # extras that usually hold pytest and plugins
 # Phase 2 has no network, so the project is not installed: its files are put on the path.
@@ -122,6 +133,8 @@ def _variant(project: Path, names: set[str]) -> tuple[Variant, dict[str, str], l
 
 class PythonProfile:
     name = "python"
+    test_framework = "pytest"
+    generated_test_path = "tests/test_patchloop_generated.py"
 
     def detect(self, project: Path) -> bool:
         if any((project / m).is_file() for m in ("pyproject.toml", "setup.py", "setup.cfg")):
@@ -148,3 +161,17 @@ class PythonProfile:
 
     def parse_check(self, stage: Stage, result: ExecResult, tail_lines: int) -> CheckResult:
         return parse_check(stage, result, tail_lines)
+
+    def test_file_command(self, setup: ProjectSetup, path: str) -> str:
+        return f"{setup.test} {shlex.quote(path)}"
+
+    def classify_test_run(self, result: CheckResult) -> TestVerdict:
+        if result.passed:
+            return "passes"
+        for failure in result.failures:
+            # No symbol: a collection error or output the parser could not read.
+            if failure.kind == "runtime" or failure.symbol is None:
+                return "broken"
+            if failure.message.startswith(BROKEN_TEST_ERRORS):
+                return "broken"
+        return "reproduces"
