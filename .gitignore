@@ -24,6 +24,10 @@ htmlcov/
 .idea/
 .vscode/
 
+# Claude Code: personal settings (the shared ones in .claude/ are tracked)
+.claude/settings.local.json
+CLAUDE.local.md
+
 # OS
 .DS_Store
 

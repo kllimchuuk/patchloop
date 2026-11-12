@@ -99,3 +99,20 @@ Každý záznam: dátum, rozhodnutie, prečo, čo sa zmenilo. Rozhodnutia robí 
         - `no_bugs_found` má vysvetlenie (testy projektu prešli / základné testy prešli / nepodarilo sa vygenerovať použiteľný test).
         - *Nájdené pri ručnom behu s reálnym modelom:* pytest bez terminálu predpokladá 80 stĺpcov a dlhý riadok súhrnu skráti na `...`; správny test s `assert` dostal správu `...` a verdikt `broken`. Oprava na dvoch miestach: v kontajneri `COLUMNS=1000` (`BASE_ENV`) a parser pri správe končiacej `...` berie prvý riadok `E` z výpisu. Chyba zasahovala aj Programátora (dostával `...` namiesto dôvodu pádu).
         - *Rozhodnuté (2026-11-12):* projekt bez testov a bez popisu, ktorého zostavenie alebo linter zlyhá, dostane po oprave `reliability="normal"`. Zlyhanie zostavenia či lintu je objektívne kritérium: pôvodný kód ho nespĺňa a oprava áno. `reduced` ostáva len pre režim A (SPEC §9) a pre beh bez testu, ktorý reprodukuje chybu z popisu.
+
+## 12. 11. 2026 — spôsob práce s agentom
+
+28. **Pracovný postup s Claude Code je v repozitári (`.claude/`): skilly, nezávislý recenzent a pravidlá vynútené nástrojom, nie len text v `CLAUDE.md`.** *Zadané autorom («zaviesť postup z projektu helpdesk-ai-drafts a aktuálne odporúčania»); návrh potvrdený 12. 11. 2026 s dvoma úpravami: agent commituje lokálne a smie čítať `.env`.*
+    - *Prečo:* doteraz bol postup opísaný v `CLAUDE.md` a v promptoch sedení; pravidlo v texte agent dodrží takmer vždy, ale nie zaručene. Dokumentácia Claude Code (Best practices) odporúča deliť pokyny na dve skupiny: čo má agent zvážiť (`CLAUDE.md`, skilly) a čo nemá výnimky (deny pravidlá, hooky). Z projektu `helpdesk-ai-drafts` sa preberá to, čo sa tam osvedčilo: cyklus «špecifikácia → zlyhávajúci test → kód → kontroly → nezávislé review → správa», kontrolný zoznam invariantov a recenzent s čistým kontextom, ktorý nemôže nič meniť.
+    - *Čo sa zavádza:*
+        - skill `spec-step`: cyklus jedného kroku SPEC §14. Rozhodnutia a prompt sedenia (`docs/prompts/NN-*.md`, s testami ku každému podkroku) pred kódom, test pred kódom, review, lokálne commity, správa;
+        - skill `invariants-check`: invarianty P1–P12 (pieskovisko, nedotknutý originál, nedôveryhodná kópia, riadenie toku mimo modelu, ohraničené cykly, ochrany Testera, čestný výsledok, tajomstvá) so zdrojom v SPEC a s príznakmi porušenia;
+        - skill `report`: formát ZVIT, len zmerané čísla;
+        - subagent `branch-reviewer`: bez nástrojov na úpravu súborov; hook `reviewer_readonly.py` mu v Bash povolí len čítacie príkazy git, `ruff check` a `pytest`. Názov sa zámerne líši od agenta Recenzent v produkte;
+        - `.claude/settings.json`: `git push`, `git commit --amend` a `git reset --hard` sú zakázané; merge, rebase a `uv add` vyžadujú potvrdenie;
+        - commity: agent commituje lokálne (niekoľko väčších commitov na krok, Conventional Commits, súbory pridáva menovite), push, pull request a merge robí autor. Doteraz commitoval len autor; lokálny commit sa dá vrátiť, push nie, preto hranica leží tam;
+        - `.env`: agent ho smie čítať, keď to práca vyžaduje; hodnoty tajomstiev nevypisuje do chatu, logov, správ ani commitov a súbor nikdy nepridáva do gitu;
+        - Stop hook `checks_before_stop.py`: ak sa zmenil kód, spustí `ruff check` a jednotkové testy a červený výsledok raz vráti agentovi (pri druhom zastavení ťah skončí, aby sa dal nahlásiť stav, ktorý čaká na rozhodnutie).
+    - *Čo sa nepreberá z helpdesk-ai-drafts:* riadok `Co-Authored-By` v commitoch; dokumentácia ostáva po slovensky; zákaz komentárov v kóde sa nezavádza.
+    - *Čo sa nemení:* SPEC, poradie krokov v §14, formát správy, pravidlo «len súbory, ktoré žiada prompt alebo SPEC».
+    - *Zmenilo sa:* nový adresár `.claude/` (`settings.json`, `agents/`, `skills/`, `hooks/`), `tests/unit/test_claude_hooks.py`, `CLAUDE.md` (časti «How we work», «Commands», «Enforced by the harness»), `.gitignore`.
