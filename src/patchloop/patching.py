@@ -53,7 +53,10 @@ def apply_patch(workdir: Path, patch: Patch) -> None:
             raise PatchError(f"{relative}: content is not valid text") from exc
     for relative, data in prepared.items():
         target = _resolve(workdir, relative)
-        target.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:  # e.g. a file where a directory is needed
+            raise PatchError(f"cannot write {relative}: {exc}") from exc
         flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
         try:
             fd = os.open(target, flags, 0o644)  # O_NOFOLLOW: a symlink at the end is an error

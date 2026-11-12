@@ -135,11 +135,9 @@ def _pytest_failure(
     file, line = _locate(body)
     if file is None:
         file = relative_path(path) if path.endswith(".py") else None
-    if not message:
-        message = next(
-            (m.group(1) for ln in reversed(body) if (m := PYTEST_MESSAGE_RE.match(ln))),
-            f"{status.lower()} in {test_id}",
-        )
+    if not message or message.endswith("..."):  # pytest cuts a long summary line to "..."
+        full = next((m.group(1) for ln in body if (m := PYTEST_MESSAGE_RE.match(ln))), None)
+        message = full or message or f"{status.lower()} in {test_id}"
     symbol = re.sub(r"\[.*\]$", "", name.rsplit("::", 1)[-1]) if name else None
     return Failure(
         kind="test",
@@ -179,13 +177,20 @@ def _runtime_result(stage: Stage, result: ExecResult, tail: str) -> CheckResult:
     return CheckResult(stage=stage, passed=False, failures=[failure], duration_s=result.duration_s)
 
 
-def parse_check(stage: Stage, result: ExecResult, tail_lines: int) -> CheckResult:
-    """Turn one container run into a `CheckResult`; a failed run always has a failure."""
+def parse_check(
+    stage: Stage, result: ExecResult, tail_lines: int, *, empty_ok: bool = True
+) -> CheckResult:
+    """Turn one container run into a `CheckResult`; a failed run always has a failure.
+
+    `empty_ok`: pytest collecting nothing passes (a project may have no tests). A run of one
+    file that must contain a test sets it to False: nothing collected is then a failure.
+    """
     output = result.stdout + ("\n" + result.stderr if result.stderr else "")
     tail = _tail(output, tail_lines)
     if result.timed_out or result.oom_killed:
         return _runtime_result(stage, result, tail)
-    passed = result.exit_code == 0 or (stage == "tests" and result.exit_code == PYTEST_NO_TESTS)
+    no_tests = stage == "tests" and result.exit_code == PYTEST_NO_TESTS and empty_ok
+    passed = result.exit_code == 0 or no_tests
     failures: list[Failure] = []
     failing = 0
     if not passed:

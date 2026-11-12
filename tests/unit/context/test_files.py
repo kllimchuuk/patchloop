@@ -93,3 +93,10 @@ def test_has_tests_looks_for_test_files_but_not_a_lone_conftest(tmp_path):
     assert has_tests(tmp_path)
     other = write_files(tmp_path / "other", {"calc_test.py": ""})
     assert has_tests(other)
+
+
+def test_has_tests_knows_the_django_module_and_ignores_helpers_in_tests(tmp_path):
+    helpers = write_files(tmp_path / "a", {"tests/__init__.py": "", "tests/factories.py": ""})
+    assert not has_tests(helpers)
+    assert has_tests(write_files(tmp_path / "b", {"shop/tests.py": ""}))
+    assert has_tests(write_files(tmp_path / "c", {"shop/views_tests.py": ""}))

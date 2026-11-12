@@ -1,8 +1,10 @@
+import os
+
 import pytest
 from support.fake_completion import ScriptedCompletion
 from support.projects import make_buggy_project, write_files
 
-from patchloop.agents.tester import PreviousTry, free_path, propose_test
+from patchloop.agents.tester import MAX_PATH_VARIANTS, PreviousTry, free_path, propose_test
 from patchloop.config import LlmConfig, LoopConfig
 from patchloop.llm.client import FakeLLMClient, LiteLLMClient
 from patchloop.schemas import TestPlan
@@ -50,7 +52,7 @@ def test_basic_mode_asks_for_tests_of_key_functions_without_an_issue(tmp_path):
 def test_a_rejected_test_and_the_reason_go_back_to_the_model(project):
     previous = PreviousTry("def test_old(): ...", "It passes on the current code.")
     _, user = _prompt(project, previous=previous)
-    assert "## Your previous test was rejected" in user
+    assert "## Your previous answer was rejected" in user
     assert "It passes on the current code." in user and "def test_old(): ..." in user
 
 
@@ -64,3 +66,23 @@ def test_free_path_never_picks_an_existing_file(tmp_path):
     assert free_path(tmp_path, PATH) == PATH
     write_files(tmp_path, {PATH: "", "tests/test_patchloop_generated_2.py": ""})
     assert free_path(tmp_path, PATH) == "tests/test_patchloop_generated_3.py"
+
+
+def test_free_path_gives_up_instead_of_looping(tmp_path):
+    names = ["tests/test_patchloop_generated.py"] + [
+        f"tests/test_patchloop_generated_{n}.py" for n in range(2, MAX_PATH_VARIANTS + 1)
+    ]
+    write_files(tmp_path, dict.fromkeys(names, ""))
+    assert free_path(tmp_path, PATH) is None
+
+
+def test_free_path_gives_up_when_the_tests_directory_is_a_link(tmp_path):
+    (tmp_path / "elsewhere").mkdir()
+    os.symlink(tmp_path / "elsewhere", tmp_path / "tests")
+    assert free_path(tmp_path, PATH) is None
+
+
+def test_an_answer_that_was_not_a_test_is_described_without_a_previous_test(project):
+    _, user = _prompt(project, previous=PreviousTry("", "It was not a valid test file: x"))
+    assert "## Your previous answer was rejected\nProblem: It was not a valid test file: x" in user
+    assert "PREVIOUS TEST" not in user

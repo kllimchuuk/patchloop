@@ -92,16 +92,21 @@ def project_sources(workdir: Path) -> list[str]:
     return found
 
 
+def _is_test_module(name: str) -> bool:
+    """File names that hold tests (`tests.py` is the Django convention)."""
+    suffixes = ("_test.py", "_tests.py")
+    return name.startswith("test_") or name.endswith(suffixes) or name == "tests.py"
+
+
 def _is_test(path: str) -> bool:
     name = path.rsplit("/", 1)[-1]
     in_tests = path.startswith(("tests/", "test/")) or "/tests/" in path
-    named = name.startswith("test_") or name.endswith("_test.py") or name == "conftest.py"
-    return in_tests or named
+    return in_tests or _is_test_module(name) or name == "conftest.py"
 
 
 def has_tests(workdir: Path) -> bool:
-    """Whether the project has any test file (a lone `conftest.py` is not a test)."""
-    return any(_is_test(p) and not p.endswith("conftest.py") for p in project_sources(workdir))
+    """Whether the project has a test module (helpers in `tests/` and `conftest.py` are not)."""
+    return any(_is_test_module(p.rsplit("/", 1)[-1]) for p in project_sources(workdir))
 
 
 def _excerpt(text: str, line: int | None, radius: int) -> str:

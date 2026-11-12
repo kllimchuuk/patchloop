@@ -51,7 +51,12 @@ class LanguageProfile(Protocol):
         """The test command narrowed to one file."""
         raise NotImplementedError
 
-    def classify_test_run(self, result: CheckResult) -> TestVerdict:
+    def parse_test_file(self, result: ExecResult, tail_lines: int) -> CheckResult:
+        """Like `parse_check("tests")`, but a file in which no test was found is a failure."""
+        raise NotImplementedError
+
+    def classify_test_run(self, result: CheckResult, path: str) -> TestVerdict:
         """`reproduces`: fails the way a test of a bug should; `passes`; `broken`: the test
-        itself is wrong (import or syntax error, timeout, unparsed output), not the code."""
+        itself is wrong (import or syntax error, timeout, unparsed output), not the code.
+        `path` is the generated test file, to tell its own errors from errors in the code."""
         raise NotImplementedError

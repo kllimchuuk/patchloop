@@ -18,6 +18,7 @@ from patchloop.schemas import TestPlan
 
 TesterMode = Literal["issue", "basic"]
 MAX_PREVIOUS_CHARS = 6000
+MAX_PATH_VARIANTS = 10
 
 SYSTEM_PROMPT = """\
 You are the Tester in an automated bug-fixing system. You write ONE new test file for a project. \
@@ -57,20 +58,24 @@ class TesterResult:
 
 @dataclass(frozen=True)
 class PreviousTry:
-    """An earlier test of the same run and why it was not accepted."""
+    """An earlier attempt of the same run and why it was not accepted (`content` may be empty:
+    the answer was not a usable test at all)."""
 
     content: str
     problem: str
 
 
-def free_path(workdir: Path, preferred: str) -> str:
-    """`preferred`, or a numbered variant of it: existing project files are never overwritten."""
+def free_path(workdir: Path, preferred: str) -> str | None:
+    """`preferred`, or a numbered variant of it: existing project files are never overwritten.
+
+    None when no variant is free (or the directory is a link): there is nowhere safe to put it.
+    """
     stem, dot, suffix = preferred.rpartition(".")
-    candidate, number = preferred, 1
-    while _exists(workdir, candidate):
-        number += 1
-        candidate = f"{stem}_{number}{dot}{suffix}"
-    return candidate
+    for number in range(1, MAX_PATH_VARIANTS + 1):
+        candidate = preferred if number == 1 else f"{stem}_{number}{dot}{suffix}"
+        if not _exists(workdir, candidate):
+            return candidate
+    return None
 
 
 def _exists(workdir: Path, relative: str) -> bool:
@@ -96,10 +101,10 @@ def build_messages(
         text = previous.content
         if len(text) > MAX_PREVIOUS_CHARS:
             text = text[:MAX_PREVIOUS_CHARS] + "\n... (cut)"
-        parts.append(
-            "## Your previous test was rejected\n"
-            f"Problem: {previous.problem}\n\n### PREVIOUS TEST\n{text}\n### END PREVIOUS TEST"
-        )
+        rejected = f"## Your previous answer was rejected\nProblem: {previous.problem}"
+        if text:
+            rejected += f"\n\n### PREVIOUS TEST\n{text}\n### END PREVIOUS TEST"
+        parts.append(rejected)
     parts.append(files_section)
     system = SYSTEM_PROMPT.format(
         framework=framework, path=path, goal=GOALS[mode], language=language

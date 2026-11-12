@@ -53,9 +53,15 @@ def test_generated_tests_are_classified_in_a_container(docker_client, buggy_proj
         ),
         "tests/test_gen_import.py": ("from pkg.nope import add\n", "broken"),
         "tests/test_gen_syntax.py": ("def test_x(:\n", "broken"),
+        "tests/test_gen_fixture.py": ("def test_x(client):\n    assert client\n", "broken"),
+        "tests/test_gen_attr.py": (
+            "import pkg.calc as c\n\n\ndef test_x():\n    assert c.nope(1) == 1\n",
+            "broken",
+        ),
+        "tests/test_gen_empty.py": ("def check_x():\n    assert False\n", "broken"),
     }
     with workspace(buggy_project, parent=tmp_path) as work:
         for path, (text, expected) in generated.items():
             (work / path).write_text(text, encoding="utf-8")
             result = run_test_file(docker_client, config, profile, setup, image, work, path)
-            assert profile.classify_test_run(result) == expected, (path, result)
+            assert profile.classify_test_run(result, path) == expected, (path, result)

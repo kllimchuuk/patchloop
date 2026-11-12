@@ -27,7 +27,7 @@ from patchloop.checks import run_checks, run_test_file
 from patchloop.config import Config
 from patchloop.context.files import has_tests
 from patchloop.llm.client import LLMClient
-from patchloop.patching import apply_patch, make_diff, patch_hash, restore_files
+from patchloop.patching import PatchError, apply_patch, make_diff, patch_hash, restore_files
 from patchloop.profiles.base import LanguageProfile, ProjectSetup
 from patchloop.profiles.registry import detect_profile
 from patchloop.sandbox import ensure_image, make_workspace, remove_workspace
@@ -129,13 +129,12 @@ class Engine:
                 self.docker, self.config, self.profile, self.setup, self.image, self.work, path
             )
         finally:
-            (self.work / path).unlink(missing_ok=True)
+            restore_files(self.base, self.work, [path])  # never follows a link (decision 23)
 
     def _run_checks(self, repro: dict[str, str] | None = None) -> list[CheckResult]:
         """The project's checks, then the generated test (only if the build passed)."""
         assert self.profile is not None
-        for path in repro or {}:
-            (self.work / path).unlink(missing_ok=True)  # the test is not part of build or lint
+        restore_files(self.base, self.work, list(repro or {}))  # not part of build or lint
         results = self.checks_fn(
             self.docker, self.config, self.profile, self.setup, self.image, self.work
         )
@@ -148,7 +147,10 @@ class Engine:
         update: RunState = {"original": results}
         issue = state["issue"]
         if passed(results) and not issue and has_tests(self.work):
-            update["result"] = RunResult(status="no_bugs_found", stop_reason="none")
+            update["result"] = RunResult(
+                status="no_bugs_found",
+                explanation="The build, the linter and the project's own tests all pass.",
+            )
             update["route"] = "finish"
         elif self.clock() >= self.deadline:
             update["stop_reason"] = "timeout"
@@ -171,7 +173,9 @@ class Engine:
         mode = state["tester_mode"]
         path = free_path(self.work, self.profile.generated_test_path)
         previous: PreviousTry | None = None
-        for _ in range(self.config.max_test_attempts):
+        basic_passed = False
+        for _ in range(self.config.max_test_attempts if path is not None else 0):
+            assert path is not None
             if self.clock() >= self.deadline:
                 break
             outcome = propose_test(
@@ -185,12 +189,18 @@ class Engine:
                 previous=previous,
                 language=self.config.language,
             )
-            if outcome.plan is None:  # an unusable answer is a spent attempt
+            if outcome.plan is None:  # an unusable answer is a spent attempt; say why next time
+                problem = f"It was not a valid test file: {_clip(outcome.error or '')}"
+                previous = PreviousTry(previous.content if previous else "", problem)
                 continue
             content = outcome.plan.content
-            check = self._run_test_file(path, content)
-            verdict = self.profile.classify_test_run(check)
+            try:
+                check = self._run_test_file(path, content)
+            except PatchError:
+                break  # the workspace cannot hold the file (a link or a file in the way)
+            verdict = self.profile.classify_test_run(check, path)
             if verdict == "passes" and mode == "basic":
+                basic_passed = True
                 break  # the basic tests pass: nothing found
             if verdict == "reproduces":
                 reliability = "normal" if mode == "issue" else "reduced"
@@ -205,7 +215,16 @@ class Engine:
         if self.clock() >= self.deadline:
             return {"stop_reason": "timeout", "route": "finish"}
         if mode == "basic":
-            result = RunResult(status="no_bugs_found", stop_reason="none", reliability="reduced")
+            why = (
+                "Basic generated tests pass."
+                if basic_passed
+                else "No usable test could be generated, so only the build and the linter ran."
+            )
+            result = RunResult(
+                status="no_bugs_found",
+                explanation=f"{why} The project has no tests of its own: reduced reliability.",
+                reliability="reduced",
+            )
             return {"result": result, "route": "finish"}
         return {"route": "fix"}  # no test: go on from the description, as less reliable
 
@@ -220,7 +239,12 @@ class Engine:
             apply_patch(self.work, Patch(files=best_files, explanation="best attempt so far"))
         best = state["best"]
         failures = all_failures(attempts[best].checks if best is not None else state["original"])
-        history = [note for note, attempt in zip(notes, attempts, strict=True) if attempt.checks]
+        # a refused answer stays in the history: the model must see why, or it repeats itself
+        history = [
+            note
+            for note, attempt in zip(notes, attempts, strict=True)
+            if attempt.checks or note.refused
+        ]
         outcome = propose_patch(
             self.llm,
             self.work,
@@ -233,7 +257,7 @@ class Engine:
         )
         if outcome.patch is None:  # a spent attempt: nothing to apply or check
             attempt = Attempt(index=len(attempts), patch_hash="")
-            note = HistoryEntry(f"(no usable answer: {outcome.error})", [])
+            note = HistoryEntry(outcome.error or "no usable answer", [], refused=True)
             return {
                 "attempts": [*attempts, attempt],
                 "notes": [*notes, note],
