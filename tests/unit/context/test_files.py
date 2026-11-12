@@ -2,7 +2,7 @@ import os
 
 from support.projects import write_files
 
-from patchloop.context.files import gather_context, local_imports
+from patchloop.context.files import gather_context, has_tests, local_imports
 from patchloop.schemas import Failure
 
 LIMITS = {"total_chars": 10_000, "max_file_chars": 1_000, "excerpt_lines": 2}
@@ -84,3 +84,19 @@ def test_budget_is_respected(tmp_path):
     files = gather_context(tmp_path, [_fail("a.py"), _fail("b.py")], **limits)
     assert [(f.path, f.whole) for f in files] == [("a.py", True), ("b.py", False)]
     assert sum(len(f.text) for f in files) <= 900
+
+
+def test_has_tests_looks_for_test_files_but_not_a_lone_conftest(tmp_path):
+    write_files(tmp_path, {"pkg/calc.py": "x = 1\n", "conftest.py": ""})
+    assert not has_tests(tmp_path)
+    write_files(tmp_path, {"tests/test_calc.py": "def test_a():\n    pass\n"})
+    assert has_tests(tmp_path)
+    other = write_files(tmp_path / "other", {"calc_test.py": ""})
+    assert has_tests(other)
+
+
+def test_has_tests_knows_the_django_module_and_ignores_helpers_in_tests(tmp_path):
+    helpers = write_files(tmp_path / "a", {"tests/__init__.py": "", "tests/factories.py": ""})
+    assert not has_tests(helpers)
+    assert has_tests(write_files(tmp_path / "b", {"shop/tests.py": ""}))
+    assert has_tests(write_files(tmp_path / "c", {"shop/views_tests.py": ""}))

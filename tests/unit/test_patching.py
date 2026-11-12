@@ -155,3 +155,9 @@ def test_restore_refuses_a_symlinked_directory(tmp_path):
     with pytest.raises(PatchError, match="symlink"):
         restore_files(original, work, ["pkg/new.py"])
     assert (outside / "new.py").read_text() == "keep\n"
+
+
+def test_a_file_where_a_directory_is_needed_is_a_patch_error(tmp_path):
+    (tmp_path / "tests").write_text("i am a file\n", encoding="utf-8")
+    with pytest.raises(PatchError, match="cannot write"):
+        apply_patch(tmp_path, Patch(files={"tests/test_x.py": "x\n"}, explanation="e"))

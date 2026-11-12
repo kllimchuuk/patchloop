@@ -2,18 +2,22 @@
 
 import posixpath
 import re
+import shlex
 import tomllib
 from pathlib import Path
 from typing import Literal
 
 from patchloop.config import Config
-from patchloop.profiles.base import ProfileError, ProjectSetup
+from patchloop.profiles.base import ProfileError, ProjectSetup, TestVerdict
 from patchloop.profiles.python_errors import Stage, parse_check
 from patchloop.sandbox.runner import ExecResult
 from patchloop.schemas import CheckResult
 
 Variant = Literal["django", "fastapi", "generic"]
 MAX_MANIFEST_BYTES = 1_000_000
+DEFAULT_TEST = "pytest -x -q -p no:cacheprovider"
+# A failed assertion is what a test of a bug should end with, wherever it is raised.
+ASSERTION_MESSAGES = ("assert", "AssertionError", "Failed:")  # "Failed:" = pytest.fail, raises
 GENERATED_REQUIREMENTS = ".patchloop/pyproject-requirements.txt"
 TEST_GROUPS = {"dev", "test", "tests", "testing"}  # extras that usually hold pytest and plugins
 # Phase 2 has no network, so the project is not installed: its files are put on the path.
@@ -23,6 +27,9 @@ BASE_ENV = {
     "PYTHONPATH": "/work:/work/src",
     "PYTHONDONTWRITEBYTECODE": "1",
     "PYTHONPYCACHEPREFIX": "/tmp/pycache",
+    # Without a terminal pytest assumes 80 columns and cuts the failure line of its summary to
+    # "...", which hides what failed (the parser also reads the full message from the report).
+    "COLUMNS": "1000",
 }
 SETTINGS_RE = re.compile(r"""DJANGO_SETTINGS_MODULE["']\s*,\s*["']([\w.]+)["']""")
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*")
@@ -122,6 +129,8 @@ def _variant(project: Path, names: set[str]) -> tuple[Variant, dict[str, str], l
 
 class PythonProfile:
     name = "python"
+    test_framework = "pytest"
+    generated_test_path = "tests/test_patchloop_generated.py"
 
     def detect(self, project: Path) -> bool:
         if any((project / m).is_file() for m in ("pyproject.toml", "setup.py", "setup.cfg")):
@@ -142,9 +151,34 @@ class PythonProfile:
             install=config.install or install,
             build=config.build or "python -m compileall -q .",
             lint=config.lint or "ruff check --output-format=concise .",
-            test=config.test or "pytest -x -q -p no:cacheprovider",
+            test=config.test or DEFAULT_TEST,
             env={**env, **config.env},
         )
 
     def parse_check(self, stage: Stage, result: ExecResult, tail_lines: int) -> CheckResult:
         return parse_check(stage, result, tail_lines)
+
+    def test_file_command(self, setup: ProjectSetup, path: str) -> str:
+        """Always plain pytest on one file: appending a path to a custom `test` command (a
+        `make` target, `pytest tests/unit`) would not narrow it to that file."""
+        return f"{DEFAULT_TEST} {shlex.quote(path)}"
+
+    def parse_test_file(self, result: ExecResult, tail_lines: int) -> CheckResult:
+        return parse_check("tests", result, tail_lines, empty_ok=False)
+
+    def classify_test_run(self, result: CheckResult, path: str) -> TestVerdict:
+        """`reproduces`: every failure is an assertion, or an exception raised inside the
+        project's code (the bug itself). Anything else that happens in the test file (a missing
+        name, attribute or fixture, a bad call), a collection error, a timeout or unparsed
+        output means the test is wrong, not the code."""
+        if result.passed:
+            return "passes"
+        if any(f.kind == "runtime" or f.symbol is None for f in result.failures):
+            return "broken"  # symbol None: a collection error or output the parser cannot read
+        for failure in result.failures:
+            if failure.message.startswith(ASSERTION_MESSAGES):
+                continue
+            if failure.file is not None and failure.file != path:
+                continue
+            return "broken"
+        return "reproduces"

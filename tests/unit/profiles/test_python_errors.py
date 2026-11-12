@@ -87,6 +87,7 @@ def test_pytest_collecting_nothing_is_not_a_failure():
     result = ExecResult(exit_code=5, stdout="no tests ran in 0.01s", stderr="", duration_s=1.0)
     assert parse_check("tests", result, tail_lines=10).passed
     assert not parse_check("build", result, tail_lines=10).passed
+    assert not parse_check("tests", result, tail_lines=10, empty_ok=False).passed
 
 
 @pytest.mark.parametrize("stage", ["build", "lint", "tests"])
@@ -135,3 +136,33 @@ def test_profile_delegates_to_the_parser():
     result = ExecResult(exit_code=1, stdout="a.py:3:1: F401 x", stderr="", duration_s=1.0)
     check = PythonProfile().parse_check("lint", result, 5)
     assert check.failures[0].file == "a.py"
+
+
+TRUNCATED_SUMMARY = """\
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____________________ TestMean.test_mean_with_a_long_name_here ____________________
+
+self = <test_gen.TestMean object at 0x1>
+
+    def test_mean_with_a_long_name_here(self):
+>       assert mathx.mean([1, 3]) == 2.0
+E       assert 1.3333333333333333 == 2.0
+E        +  where 1.3333333333333333 = <function mean at 0x2>([1, 3])
+
+tests/test_gen.py:7: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_gen.py::TestMean::test_mean_with_a_long_name_here - ...
+1 failed in 0.01s
+"""
+
+
+def test_a_message_that_pytest_cut_to_dots_is_read_from_the_report():
+    result = ExecResult(exit_code=1, stdout=TRUNCATED_SUMMARY, stderr="", duration_s=0.5)
+    (failure,) = parse_check("tests", result, tail_lines=10).failures
+    assert failure.message == "assert 1.3333333333333333 == 2.0"
+    assert (failure.file, failure.line, failure.symbol) == (
+        "tests/test_gen.py",
+        7,
+        "test_mean_with_a_long_name_here",
+    )

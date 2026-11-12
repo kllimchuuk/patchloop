@@ -62,6 +62,7 @@ def test_profile_overrides_load_from_spec_example(tmp_path):
     [
         "max_atempts: 2\n",  # a typo in a top-level key
         "max_attempts: 0\n",  # out of range
+        "max_test_attempts: 4\n",  # SPEC §9: the Tester has 2-3 tries
         "sandbox:\n  memory: 512\n",  # a typo in a section
         "loop:\n  timeout: 5\n",
         "loop:\n  tail_lines: 1\n",  # below the minimum

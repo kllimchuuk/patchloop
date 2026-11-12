@@ -122,3 +122,43 @@ def test_an_unsafe_path_from_the_model_counts_as_an_invalid_answer(project):
     result = propose_patch(_real_client([bad, bad]), project, [FAILURE], LOOP)
     assert result.patch is None
     assert "invalid answer twice" in result.error and "../evil.py" in result.error
+
+
+GEN_TEST = "tests/test_calc.py"
+
+
+def test_a_read_only_file_is_labelled_and_the_system_prompt_says_so(project):
+    llm = FakeLLMClient([FIX])
+    propose_patch(llm, project, [FAILURE], LOOP, protected=[GEN_TEST])
+    system, user = (m["content"] for m in llm.calls[0])
+    assert f"### FILE {GEN_TEST} (read-only)" in user
+    assert "### FILE pkg/calc.py (full)" in user
+    assert '"read-only" must not be changed' in system
+
+
+def test_a_changed_read_only_file_is_refused(project):
+    weaker = Patch(files={GEN_TEST: "def test_add():\n    pass\n"}, explanation="e")
+    result = propose_patch(FakeLLMClient([weaker]), project, [FAILURE], LOOP, protected=[GEN_TEST])
+    assert result.patch is None and "must not be edited" in result.error
+
+
+def test_an_unchanged_copy_of_a_read_only_file_is_dropped_from_the_patch(project):
+    echoed = Patch(
+        files={"pkg/calc.py": FIX.files["pkg/calc.py"], GEN_TEST: (project / GEN_TEST).read_text()},
+        explanation="fix + echo",
+    )
+    result = propose_patch(FakeLLMClient([echoed]), project, [FAILURE], LOOP, protected=[GEN_TEST])
+    assert result.error is None and result.patch.files == FIX.files
+
+
+def test_a_patch_with_only_an_echo_of_a_read_only_file_changes_nothing(project):
+    echo = Patch(files={GEN_TEST: (project / GEN_TEST).read_text()}, explanation="e")
+    result = propose_patch(FakeLLMClient([echo]), project, [FAILURE], LOOP, protected=[GEN_TEST])
+    assert result.patch is None and result.error == "the patch changes nothing"
+
+
+def test_a_refused_attempt_is_shown_with_its_reason_and_without_errors_left(project):
+    refused = HistoryEntry("the patch changes tests/x.py, a generated test", [], refused=True)
+    _, user = _prompt(project, history=[refused])
+    assert "Attempt 1 was refused and not applied: the patch changes tests/x.py" in user
+    assert "Errors after it" not in user

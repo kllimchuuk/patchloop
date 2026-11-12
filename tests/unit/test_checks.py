@@ -5,7 +5,7 @@ import pytest
 from support.fake_docker import FakeDocker
 
 from patchloop import checks
-from patchloop.checks import run_checks
+from patchloop.checks import run_checks, run_test_file
 from patchloop.config import Config
 from patchloop.profiles.base import ProfileError
 from patchloop.profiles.python import PythonProfile
@@ -94,3 +94,14 @@ def test_only_profile_env_reaches_the_container(tmp_path, monkeypatch):
         assert "OPENAI_API_KEY" not in kwargs["environment"]
         assert kwargs["network_mode"] == "none"
     assert docker.containers.created[2][0][1] == ["pytest", "-x", "-q", "-p", "no:cacheprovider"]
+
+
+def test_run_test_file_runs_the_test_command_for_that_file_only(tmp_path, monkeypatch):
+    script = Script({"pytest": _exec(1, "FAILED tests/test_new.py::test_a - assert 1 == 2\n")})
+    monkeypatch.setattr(checks, "run_in_sandbox", script)
+    setup = _setup(tmp_path)
+    profile = PythonProfile()
+    result = run_test_file(None, Config(), profile, setup, "img:1", tmp_path, "tests/test_new.py")
+    command = script.calls[0][0]
+    assert command[0] == "pytest" and command[-1] == "tests/test_new.py"
+    assert (result.stage, result.passed) == ("tests", False)
