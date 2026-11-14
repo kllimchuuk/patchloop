@@ -61,16 +61,16 @@ def check(
     try:
         cfg = load_config(config)
     except ConfigError as exc:
-        console.print(f"[red]FAIL[/red] config: {exc}")
+        console.print(Text("FAIL config: ", style="red") + Text(str(exc)))
         raise typer.Exit(1) from exc
     failed = False
     for item in run_checks(cfg):
-        mark = "[green]OK  [/green]" if item.ok else "[red]FAIL[/red]"
-        console.print(f"{mark} {item.name}: {item.detail}")
+        mark = Text("OK   ", style="green") if item.ok else Text("FAIL ", style="red")
+        console.print(mark + Text(f"{item.name}: {item.detail}"))
         if not item.ok:
             failed = True
             if item.hint:
-                console.print(f"     hint: {item.hint}")
+                console.print(Text(f"     hint: {item.hint}"))
     raise typer.Exit(1 if failed else 0)
 
 
@@ -123,8 +123,10 @@ def describe_step(node: str, update: dict[str, Any]) -> str | None:
         test = update.get("generated_test")
         if test is not None:
             return f"tester: test accepted ({test.path})"
-        if "result" in update:  # the basic tests pass, the run ends here
-            return "tester: basic tests pass, nothing found"
+        result = update.get("result")
+        if result is not None:  # basic mode ended the run; its explanation says which way
+            sentence = result.explanation.split(". ")[0].rstrip(".")
+            return f"tester: {sentence[:1].lower()}{sentence[1:]}" if sentence else "tester: done"
         if update.get("route") == "fix":
             return "tester: no usable test, going on without one"
         return None  # the deadline passed; `decide` or `finish` says why the run stops

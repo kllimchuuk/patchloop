@@ -183,8 +183,10 @@ def test_a_runs_dir_inside_the_project_is_refused_before_anything_runs(setup, tm
 def test_the_tester_line_matches_what_the_tester_did():
     test = GeneratedTest(path="tests/t.py", content="c", output="o")
     assert "accepted" in describe_step("tester", {"generated_test": test})
-    done = RunResult(status="no_bugs_found")
-    assert "nothing found" in describe_step("tester", {"result": done, "route": "finish"})
+    done = RunResult(status="no_bugs_found", explanation="Basic generated tests pass. More.")
+    assert describe_step("tester", {"result": done, "route": "finish"}) == (
+        "tester: basic generated tests pass"
+    )
     assert describe_step("tester", {"stop_reason": "timeout", "route": "finish"}) is None
     assert "without one" in describe_step("tester", {"route": "fix"})
 

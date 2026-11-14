@@ -205,9 +205,14 @@ def apply_record(record: RunRecord, git_timeout_s: float | None = None) -> list[
         applied = git(project, "apply", "-", input=diff)
         if applied.returncode != 0:
             raise ApplyError(f"git apply failed: {applied.stderr.strip()}")
-    except ApplyError:
+    except ApplyError as exc:
         back = ["switch", current] if current else ["switch", "--detach", head]
-        git(project, *back)
-        git(project, "branch", "-D", branch)
+        try:
+            git(project, *back)
+            git(project, "branch", "-D", branch)
+        except ApplyError as again:  # keep the original error; say what may be left behind
+            raise ApplyError(
+                f"{exc} (rollback failed: {again}; branch {branch} may be left behind)"
+            ) from exc
         raise
     return changed

@@ -175,6 +175,22 @@ def test_git_extensions_in_the_diff_are_refused(repo, diff, extra, monkeypatch):
         apply_record(record_for(repo, extra + diff))
 
 
+def test_a_failing_rollback_does_not_hide_the_original_error(repo, diff, monkeypatch):
+    real = runs._git
+
+    def flaky(project, *args, **kw):
+        if args[:1] == ("apply",) and "--check" not in args or args[:2] in (
+            ("switch", "main"), ("branch", "-D")
+        ):
+            raise ApplyError("git hung")
+        return real(project, *args, **kw)
+
+    monkeypatch.setattr(runs, "_git", flaky)
+    with pytest.raises(ApplyError, match="git hung") as info:
+        apply_record(record_for(repo, diff))
+    assert "rollback" in str(info.value)  # says that the branch may be left behind
+
+
 def test_a_failure_after_the_branch_was_created_puts_everything_back(repo, diff, monkeypatch):
     real = runs._git
 
