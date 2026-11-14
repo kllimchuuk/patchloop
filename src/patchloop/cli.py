@@ -16,7 +16,15 @@ from patchloop.config import Config, ConfigError, load_config
 from patchloop.environment import run_checks
 from patchloop.graph import run_fix
 from patchloop.llm.client import LiteLLMClient, LLMClient
-from patchloop.runs import RunRecord, RunRecordError, new_run_id, save_record
+from patchloop.runs import (
+    ApplyError,
+    RunRecord,
+    RunRecordError,
+    apply_record,
+    load_record,
+    new_run_id,
+    save_record,
+)
 from patchloop.schemas import CheckResult, RunResult
 
 app = typer.Typer(
@@ -206,6 +214,31 @@ def fix(
         raise _fail(f"the run record was not saved: {exc}") from exc
     _show(result, record.run_id)
     raise typer.Exit(0 if result.status in ("fixed", "no_bugs_found") else 1)
+
+
+@app.command("apply")
+def apply_run(
+    run_id: Annotated[str, typer.Argument(help="Run id printed by `patchloop fix`.")],
+    config: Annotated[
+        Path | None, typer.Option("--config", help="Path to patchloop.yml.")
+    ] = None,
+) -> None:
+    """Put the stored fix of RUN_ID on the git branch patchloop/RUN_ID (no commit, no push)."""
+    try:
+        cfg = load_config(config)
+    except ConfigError as exc:
+        raise _fail(f"config: {exc}") from exc
+    try:
+        record = load_record(cfg.runs_dir, run_id)
+        files = apply_record(record)
+    except (RunRecordError, ApplyError) as exc:
+        raise _fail(str(exc)) from exc
+    if record.result.status == "partially_fixed":
+        console.print("[yellow]Warning[/yellow]: partial fix, some checks still fail.")
+    console.print(Text(f"Branch patchloop/{run_id} has the fix, uncommitted:"), soft_wrap=True)
+    for name in files:
+        console.print(Text(f"  {name}"), soft_wrap=True)
+    console.print("Review it with: git diff")
 
 
 def main() -> None:
