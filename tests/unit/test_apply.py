@@ -144,7 +144,10 @@ def test_a_diff_that_no_longer_fits_leaves_no_branch_behind(repo, diff):
     assert branches(repo) == ["main"]
 
 
-@pytest.mark.parametrize("bad", ["../outside.py", "/etc/passwd", "a/../../x", ".git/config"])
+@pytest.mark.parametrize(
+    "bad",
+    ["../outside.py", "/etc/passwd", "a/../../x", ".git/config", ".GIT/config", "d/.Git/x"],
+)
 def test_a_path_outside_the_project_is_refused_before_git_runs(repo, bad, monkeypatch):
     evil = f"--- /dev/null\n+++ b/{bad}\n@@ -0,0 +1 @@\n+x\n"
     monkeypatch.setattr(runs, "_git", lambda *a, **k: pytest.fail("git must not run"))
@@ -229,3 +232,26 @@ def test_an_unknown_run_and_a_bad_id_are_errors(stored):
     for run_id in ["20200101-000000-ffff", "../x"]:
         out = runner.invoke(app, ["apply", run_id, "--config", str(stored.config)])
         assert out.exit_code == 2 and "Traceback" not in out.output
+
+
+def test_the_git_timeout_comes_from_the_caller_not_a_literal(repo, diff, monkeypatch):
+    seen = []
+    real = subprocess.run
+
+    def spy(*args, **kwargs):
+        seen.append(kwargs["timeout"])
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(runs.subprocess, "run", spy)
+    apply_record(record_for(repo, diff), git_timeout_s=7.0)
+    assert seen and set(seen) == {7.0}
+
+
+def test_a_form_feed_in_a_file_does_not_break_the_diff(tmp_path):
+    before = {"m.py": "x = 1\n\x0c\ny = 2\n"}
+    after = {"m.py": "x = 1\n\x0c\ny = 3\n"}
+    repo = make_repo(tmp_path / "p", before)
+    diff = diff_between(tmp_path, before, after)
+    assert "No newline" not in diff
+    apply_record(record_for(repo, diff))
+    assert (repo / "m.py").read_text() == after["m.py"]

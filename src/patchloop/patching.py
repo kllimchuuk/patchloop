@@ -8,6 +8,7 @@ passes through one is an error.
 import difflib
 import hashlib
 import os
+import re
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -80,7 +81,9 @@ def read_text(root: Path, relative: str) -> str | None:
 
 
 def _lines(text: str) -> list[str]:
-    return text.splitlines(keepends=True)
+    """Split on newlines only: `splitlines` also breaks at form feed and other separators,
+    which would turn one line into two and invent a missing final newline."""
+    return re.findall(r"[^\n]*\n|[^\n]+", text)
 
 
 def make_diff(original: Path, changed: Path, paths: Iterable[str]) -> str:

@@ -247,3 +247,8 @@ def test_a_failing_callback_does_not_break_the_run(tmp_path):
     h = Harness(tmp_path, {"bug": checks(2), "ok": checks(0)}, answers=["ok"])
     h.engine.on_step = boom
     assert h.run().status == "fixed"
+
+
+def test_a_run_that_finds_nothing_carries_no_generated_test(tmp_path):
+    result = Harness(tmp_path, {"bug": checks(0)}, answers=[]).run()
+    assert (result.status, result.generated_test) == ("no_bugs_found", None)

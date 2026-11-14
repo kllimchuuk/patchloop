@@ -16,11 +16,11 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from patchloop.config import Config
 from patchloop.schemas import SCHEMA_VERSION, RunResult
 
 RUN_ID = re.compile(r"\d{8}-\d{6}-[0-9a-f]{4}")  # YYYYMMDD-HHMMSS-<4 hex>; also a branch name
 RECORD_FILE = "record.json"
-GIT_TIMEOUT_S = 30
 HUNK = re.compile(r"@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@")
 
 
@@ -83,7 +83,10 @@ def load_record(runs_dir: Path, run_id: str) -> RunRecord:
             raise RunRecordError(
                 f"run {run_id} has schema version {version}, this patchloop reads {SCHEMA_VERSION}"
             )
-        return RunRecord.model_validate(data)
+        record = RunRecord.model_validate(data)
+        if record.run_id != run_id:
+            raise RunRecordError(f"run id {record.run_id} in the record does not match {run_id}")
+        return record
     except RunRecordError:
         raise
     except (OSError, ValueError, AttributeError, ValidationError) as exc:
@@ -93,7 +96,9 @@ def load_record(runs_dir: Path, run_id: str) -> RunRecord:
 # ---- apply ------------------------------------------------------------------------------------
 
 
-def _git(project: Path, *args: str, input: str | None = None) -> subprocess.CompletedProcess[str]:
+def _git(
+    project: Path, *args: str, timeout: float, input: str | None = None
+) -> subprocess.CompletedProcess[str]:
     """Run git in `project` without a shell; a missing git or a hang is an `ApplyError`."""
     try:
         return subprocess.run(
@@ -102,7 +107,7 @@ def _git(project: Path, *args: str, input: str | None = None) -> subprocess.Comp
             input=input,
             capture_output=True,
             text=True,
-            timeout=GIT_TIMEOUT_S,
+            timeout=timeout,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
@@ -116,7 +121,7 @@ def _safe_path(name: str) -> str:
         raise ApplyError(f"unexpected path in the diff: {name!r}")
     if "\\" in relative or "\0" in relative or relative.startswith("/"):
         raise ApplyError(f"unsafe path in the diff: {name!r}")
-    if {"", ".", ".."} & set(parts) or ".git" in parts:
+    if {"", ".", ".."} & set(parts) or ".git" in (part.lower() for part in parts):
         raise ApplyError(f"path outside the project in the diff: {name!r}")
     return relative
 
@@ -130,7 +135,10 @@ def diff_paths(diff: str) -> list[str]:
     """
     changed: set[str] = set()
     old = new = 0  # lines still expected in the current hunk
-    for line in diff.splitlines():
+    lines = diff.split("\n")  # not splitlines: form feed and the like are inside a line
+    if lines[-1] == "":
+        lines.pop()
+    for line in lines:
         if old > 0 or new > 0:
             if line.startswith("\\"):
                 continue
@@ -154,13 +162,18 @@ def diff_paths(diff: str) -> list[str]:
     return sorted(changed)
 
 
-def apply_record(record: RunRecord) -> list[str]:
+def apply_record(record: RunRecord, git_timeout_s: float | None = None) -> list[str]:
     """Put the stored fix on the branch `patchloop/<run_id>` as an unstaged working-tree change.
 
     No commit, no push, no `git add`. Every refusal happens before anything is changed; if the
     last step fails after the branch exists, the original branch is restored and the new one
     deleted. Only the fix is applied: the generated test is not in the diff.
     """
+    limit = git_timeout_s if git_timeout_s is not None else Config().git_timeout_s
+
+    def git(project: Path, *args: str, input: str | None = None):
+        return _git(project, *args, timeout=limit, input=input)
+
     diff = record.result.diff
     if not diff:
         raise ApplyError(f"run {record.run_id} has no diff to apply ({record.result.status})")
@@ -168,33 +181,33 @@ def apply_record(record: RunRecord) -> list[str]:
     project = Path(record.project)
     if not project.is_dir():
         raise ApplyError(f"the project {project} no longer exists")
-    inside = _git(project, "rev-parse", "--is-inside-work-tree")
+    inside = git(project, "rev-parse", "--is-inside-work-tree")
     if inside.returncode != 0 or inside.stdout.strip() != "true":
         raise ApplyError(f"{project} is not a git work tree; apply needs git")
-    if _git(project, "rev-parse", "--verify", "--quiet", "HEAD").returncode != 0:
+    if git(project, "rev-parse", "--verify", "--quiet", "HEAD").returncode != 0:
         raise ApplyError("the repository has no commits yet")
-    status = _git(project, "status", "--porcelain")
+    status = git(project, "status", "--porcelain")
     if status.returncode != 0 or status.stdout.strip():
         raise ApplyError("the working tree is not clean: commit or stash the changes first")
     branch = f"patchloop/{record.run_id}"
-    if _git(project, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}").returncode == 0:
+    if git(project, "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}").returncode == 0:
         raise ApplyError(f"branch {branch} already exists")
-    checked = _git(project, "apply", "--check", "-", input=diff)
+    checked = git(project, "apply", "--check", "-", input=diff)
     if checked.returncode != 0:
         why = checked.stderr.strip()
         raise ApplyError(f"the diff does not apply to the current project: {why}")
-    current = _git(project, "branch", "--show-current").stdout.strip()
-    head = _git(project, "rev-parse", "HEAD").stdout.strip()
-    created = _git(project, "switch", "-c", branch)
+    current = git(project, "branch", "--show-current").stdout.strip()
+    head = git(project, "rev-parse", "HEAD").stdout.strip()
+    created = git(project, "switch", "-c", branch)
     if created.returncode != 0:
         raise ApplyError(f"cannot create branch {branch}: {created.stderr.strip()}")
     try:
-        applied = _git(project, "apply", "-", input=diff)
+        applied = git(project, "apply", "-", input=diff)
         if applied.returncode != 0:
             raise ApplyError(f"git apply failed: {applied.stderr.strip()}")
     except ApplyError:
         back = ["switch", current] if current else ["switch", "--detach", head]
-        _git(project, *back)
-        _git(project, "branch", "-D", branch)
+        git(project, *back)
+        git(project, "branch", "-D", branch)
         raise
     return changed

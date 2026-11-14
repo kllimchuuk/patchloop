@@ -90,3 +90,10 @@ def test_saving_never_overwrites_an_existing_run(tmp_path):
 def test_no_temp_file_is_left_behind(tmp_path):
     save_record(tmp_path, record())
     assert [p.name for p in (tmp_path / "20261114-153042-a3f9").iterdir()] == ["record.json"]
+
+
+def test_a_record_stored_under_another_id_is_refused(tmp_path):
+    save_record(tmp_path, record(run_id="20261114-153042-a3f9"))
+    (tmp_path / "20261114-153042-a3f9").rename(tmp_path / "20261114-153042-b4e0")
+    with pytest.raises(RunRecordError, match="does not match"):
+        load_record(tmp_path, "20261114-153042-b4e0")

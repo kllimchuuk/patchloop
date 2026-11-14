@@ -83,7 +83,7 @@ def build_clients(config: Config) -> tuple[LLMClient, Any]:
 
 
 def _fail(message: str) -> typer.Exit:
-    console.print(f"[red]error[/red] {message}", markup=True, highlight=False)
+    console.print(Text("error ", style="red") + Text(message))  # text, never markup
     return typer.Exit(EXIT_ERROR)
 
 
@@ -123,7 +123,11 @@ def describe_step(node: str, update: dict[str, Any]) -> str | None:
         test = update.get("generated_test")
         if test is not None:
             return f"tester: test accepted ({test.path})"
-        return "tester: no usable test, going on without one"
+        if "result" in update:  # the basic tests pass, the run ends here
+            return "tester: basic tests pass, nothing found"
+        if update.get("route") == "fix":
+            return "tester: no usable test, going on without one"
+        return None  # the deadline passed; `decide` or `finish` says why the run stops
     if node == "fix":
         patch = update.get("new_patch")
         if patch is None:
@@ -191,6 +195,9 @@ def fix(
         cfg = load_config(config)
     except ConfigError as exc:
         raise _fail(f"config: {exc}") from exc
+    runs_dir = cfg.runs_dir.expanduser().resolve()
+    if runs_dir == project or project in runs_dir.parents:
+        raise _fail(f"runs_dir {runs_dir} is inside the project: the project must stay untouched")
     problems = [item for item in run_checks(cfg) if not item.ok]
     for item in problems:
         console.print(Text(f"FAIL {item.name}: {item.detail}"), style="red")
@@ -230,7 +237,7 @@ def apply_run(
         raise _fail(f"config: {exc}") from exc
     try:
         record = load_record(cfg.runs_dir, run_id)
-        files = apply_record(record)
+        files = apply_record(record, cfg.git_timeout_s)
     except (RunRecordError, ApplyError) as exc:
         raise _fail(str(exc)) from exc
     if record.result.status == "partially_fixed":

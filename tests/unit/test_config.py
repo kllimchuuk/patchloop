@@ -87,3 +87,9 @@ def test_runs_dir_override(tmp_path):
     from pathlib import Path
 
     assert _load(tmp_path, "runs_dir: /data/runs\n").runs_dir == Path("/data/runs")
+
+
+def test_git_timeout_default_and_range(tmp_path):
+    assert Config().git_timeout_s == 30
+    with pytest.raises(ConfigError):
+        _load(tmp_path, "git_timeout_s: 0\n")

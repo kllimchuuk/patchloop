@@ -7,7 +7,7 @@ import pytest
 from support.projects import make_buggy_project
 from typer.testing import CliRunner
 
-from patchloop.cli import app
+from patchloop.cli import app, describe_step
 from patchloop.environment import CheckItem
 from patchloop.llm.client import FakeLLMClient, LLMError
 from patchloop.runs import load_record
@@ -165,6 +165,30 @@ def test_an_engine_error_is_a_message_and_exit_two_not_a_traceback(setup):
     assert saved_ids(setup.runs_dir) == []
 
 
+def test_an_error_text_with_markup_like_brackets_is_still_a_clean_message(setup):
+    setup.state["error"] = LLMError("model said [/INST] and [red]x")
+    result = setup()
+    assert result.exit_code == 2
+    assert "[/INST]" in result.output and "[red]x" in result.output
+
+
+def test_a_runs_dir_inside_the_project_is_refused_before_anything_runs(setup, tmp_path):
+    config = tmp_path / "inside.yml"
+    config.write_text(f"runs_dir: {setup.project}/runs\n", encoding="utf-8")
+    result = runner.invoke(app, ["fix", str(setup.project), "--config", str(config)])
+    assert result.exit_code == 2 and "inside the project" in result.output
+    assert setup.calls.args is None and not (setup.project / "runs").exists()
+
+
+def test_the_tester_line_matches_what_the_tester_did():
+    test = GeneratedTest(path="tests/t.py", content="c", output="o")
+    assert "accepted" in describe_step("tester", {"generated_test": test})
+    done = RunResult(status="no_bugs_found")
+    assert "nothing found" in describe_step("tester", {"result": done, "route": "finish"})
+    assert describe_step("tester", {"stop_reason": "timeout", "route": "finish"}) is None
+    assert "without one" in describe_step("tester", {"route": "fix"})
+
+
 def tree_hash(root: Path) -> str:
     digest = hashlib.sha256()
     for path in sorted(root.rglob("*")):
@@ -195,4 +219,8 @@ def test_the_original_project_is_untouched_by_a_real_engine_run(setup, monkeypat
     result = setup()
     assert result.exit_code == 0, result.output
     assert "+ok" in result.output
+    # the real update shapes of the engine produce the progress lines
+    assert "original code: build ok, lint ok, tests 1 failing" in result.output
+    assert "attempt 1: build ok, lint ok, tests ok" in result.output
+    assert "stopping: success" in result.output
     assert tree_hash(setup.project) == before

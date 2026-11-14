@@ -136,3 +136,8 @@ Každý záznam: dátum, rozhodnutie, prečo, čo sa zmenilo. Rozhodnutia robí 
     - *Konflikty:* v zázname sa hash HEAD neuchováva. `apply` najprv spustí `git apply --check`; ak diff nesedí, príkaz skončí chybou a vetva sa nevytvorí.
     - *Kódy skončenia `fix`:* 0 `fixed` alebo `no_bugs_found`, 1 `partially_fixed` alebo `not_fixed`, 2 chyba použitia alebo prostredia.
     - *Zmenilo sa:* `graph.py` (`stream`, `on_step`), nový `runs.py`, `cli.py`.
+    - *Po review (2026-11-14):*
+        - Chybové hlásenia sa vypisujú ako text, nie ako značky Rich: odpoveď modelu alebo výstup gitu s hranatými zátvorkami (`[/INST]`) inak zhodí príkaz tracebackom a kódom 1, ktorý znamená `not_fixed`.
+        - Záznam, ktorého `run_id` nesedí s priečinkom, sa odmietne; `runs_dir` vo vnútri projektu sa odmietne pred behom (relatívna cesta by zapísala záznam do originálu); limit volania gitu je `git_timeout_s` v konfigurácii; názov `.git` sa v diffe porovnáva bez ohľadu na veľkosť písmen (macOS).
+        - `make_diff` a kontrola diffu `apply` delia text len podľa `\n`: `splitlines` rozdelil riadok s form feedom na dva a vymyslel chýbajúci posledný nový riadok.
+        - *Známe obmedzenie:* nový prázdny súbor (napr. `__init__.py`) obyčajný unifikovaný diff nevie vyjadriť, takže sa z diffu stráca a `apply` ho nevytvorí. Riešenie vyžaduje rozšírený diff git (`new file mode`), ktorý kontrola diffu zámerne odmieta; ide do «Potrebné rozhodnutie» v správe.
