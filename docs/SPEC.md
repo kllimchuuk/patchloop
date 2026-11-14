@@ -134,6 +134,7 @@ class RunResult:      # finálny výsledok behu
     explanation: str
     stop_reason: Literal["success", "iteration_limit", "stagnation", "timeout", "none"]
     reliability: Literal["normal", "reduced"]   # reduced = bez vygenerovaných testov
+    generated_test: GeneratedTest | None        # test od Testera na zobrazenie; nie je súčasťou opravy
 ```
 
 Stav grafu (LangGraph) drží: snapshot projektu, popis chyby, zoznam pokusov, najlepší pokus, počítadlá limitov, aktuálny kontext. Môže sa ukladať checkpointerom.
@@ -223,6 +224,7 @@ patchloop report <run_id>       # HTML správa
 ```
 
 - **Predvolený výstup:** diff a vysvetlenie v termináli, patch uložený pri behu. Pôvodný projekt sa nemení.
+- **Záznam behu** do kroku 7: `<runs_dir>/<run_id>/record.json` (`runs_dir` predvolene `~/.patchloop/runs`; `run_id` má tvar `YYYYMMDD-HHMMSS-xxxx`). `patchloop apply` berie diff zo záznamu a pridáva len opravu, nikdy vygenerovaný test (rozhodnutia 29 a 30). Kódy skončenia `fix`: 0 `fixed` alebo `no_bugs_found`, 1 `partially_fixed` alebo `not_fixed`, 2 chyba použitia alebo prostredia.
 - **`patchloop apply`:** vytvorí vetvu `patchloop/<run_id>` a aplikuje zmeny do pracovného stromu. **Nerobí commit ani push.** Vyžaduje čistý pracovný strom a git repozitár.
 - **HTML správa** po behu (otvorí sa v prehliadači).
 - Demonštrácia z notebooku.
