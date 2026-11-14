@@ -205,7 +205,7 @@ def test_the_original_project_is_untouched_by_a_real_engine_run(setup, monkeypat
 
     from patchloop.graph import run_fix as real_run_fix
 
-    rules = {"def add(a, b):\n    return a - b\n": checks(1), "ok": checks(0)}
+    rules = {"def add(a, b):\n    return a - b\n": checks(1), "ok\n": checks(0)}
 
     def with_fakes(project, cfg, llm, docker, issue=None, **overrides):
         llm = FakeLLMClient([Patch(files={SOURCE: "ok"}, explanation="fix")])

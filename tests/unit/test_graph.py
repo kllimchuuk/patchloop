@@ -252,3 +252,11 @@ def test_a_failing_callback_does_not_break_the_run(tmp_path):
 def test_a_run_that_finds_nothing_carries_no_generated_test(tmp_path):
     result = Harness(tmp_path, {"bug": checks(0)}, answers=[]).run()
     assert (result.status, result.generated_test) == ("no_bugs_found", None)
+
+
+def test_a_patch_that_drops_the_final_newline_gets_it_back(tmp_path):
+    h = Harness(tmp_path, {"bug\n": checks(1), "ok\n": checks(0)}, answers=["ok"])
+    (h.project / SOURCE).write_text("bug\n", encoding="utf-8")
+    result = h.engine.run(None)
+    assert result.status == "fixed"
+    assert "+ok\n" in result.diff and "No newline" not in result.diff

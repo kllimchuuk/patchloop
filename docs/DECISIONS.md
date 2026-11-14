@@ -141,3 +141,10 @@ Každý záznam: dátum, rozhodnutie, prečo, čo sa zmenilo. Rozhodnutia robí 
         - Záznam, ktorého `run_id` nesedí s priečinkom, sa odmietne; `runs_dir` vo vnútri projektu sa odmietne pred behom (relatívna cesta by zapísala záznam do originálu); limit volania gitu je `git_timeout_s` v konfigurácii; názov `.git` sa v diffe porovnáva bez ohľadu na veľkosť písmen (macOS).
         - `make_diff` a kontrola diffu `apply` delia text len podľa `\n`: `splitlines` rozdelil riadok s form feedom na dva a vymyslel chýbajúci posledný nový riadok.
         - *Známe obmedzenie:* nový prázdny súbor (napr. `__init__.py`) obyčajný unifikovaný diff nevie vyjadriť, takže sa z diffu stráca a `apply` ho nevytvorí. Riešenie vyžaduje rozšírený diff git (`new file mode`), ktorý kontrola diffu zámerne odmieta; ide do «Potrebné rozhodnutie» v správe.
+
+31. **Nový prázdny súbor ide do diffu ako blok `diff --git` a kód vracia modelom zahodený posledný nový riadok.** *Navrhol Claude Code v správe 05, potvrdené autorom 14. 11. 2026 (obe odporúčané varianty).*
+    - *Prečo:* (a) obyčajný unifikovaný diff nevie vyjadriť nový prázdny súbor (napr. `__init__.py`), takže sa z diffu strácal a `apply` ho nevytvoril, hoci overená kópia ho mala. (b) Malý model vracia celý súbor často bez posledného nového riadka; v diffe to bola zmena, o ktorú nikto nežiadal. Či súbor končí novým riadkom, nemá rozhodovať model.
+    - *Čo sa zavádza:*
+        - `make_diff` pre prázdny nový súbor vydá `diff --git a/P b/P` + `new file mode 100644`; `diff_paths` (`apply`) povolí presne tento tvar (rovnaká cesta na oboch stranách, len režim 100644); iné rozšírenia gitu (premenovanie, iný režim, binárny patch) ostávajú odmietnuté;
+        - `keep_final_newline`: ak pôvodný súbor končil novým riadkom a súbor v odpovedi Programátora nie, kód ho pridá (pred hashom patchu a pred kontrolami, takže overený kód je ten istý ako v diffe); vyprázdnený a nový súbor sa nemenia.
+    - *Zmenilo sa:* `patching.py`, uzol `fix` v `graph.py`, `diff_paths` v `runs.py`. Prompt sa neladil.

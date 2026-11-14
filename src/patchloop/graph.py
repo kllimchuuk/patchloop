@@ -27,7 +27,14 @@ from patchloop.checks import run_checks, run_test_file
 from patchloop.config import Config
 from patchloop.context.files import has_tests
 from patchloop.llm.client import LLMClient
-from patchloop.patching import PatchError, apply_patch, make_diff, patch_hash, restore_files
+from patchloop.patching import (
+    PatchError,
+    apply_patch,
+    keep_final_newline,
+    make_diff,
+    patch_hash,
+    restore_files,
+)
 from patchloop.profiles.base import LanguageProfile, ProjectSetup
 from patchloop.profiles.registry import detect_profile
 from patchloop.sandbox import ensure_image, make_workspace, remove_workspace
@@ -274,8 +281,11 @@ class Engine:
                 "new_patch": None,
                 "route": "decide",
             }
-        merged = {**best_files, **outcome.patch.files}
-        return {"new_patch": outcome.patch, "merged_files": merged, "route": "apply"}
+        patch = outcome.patch.model_copy(
+            update={"files": keep_final_newline(self.base, outcome.patch.files)}
+        )
+        merged = {**best_files, **patch.files}
+        return {"new_patch": patch, "merged_files": merged, "route": "apply"}
 
     def apply(self, state: RunState) -> RunState:
         patch = state["new_patch"]

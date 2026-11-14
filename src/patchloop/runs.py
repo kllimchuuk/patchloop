@@ -126,6 +126,16 @@ def _safe_path(name: str) -> str:
     return relative
 
 
+def _empty_file_path(line: str) -> str:
+    """`diff --git a/P b/P` with the same P on both sides, nothing else."""
+    rest = line[len("diff --git ") :]
+    length = (len(rest) - 5) // 2  # "a/" + P + " b/" + P
+    path = rest[2 : 2 + length]
+    if length < 1 or rest != f"a/{path} b/{path}":
+        raise ApplyError(f"unexpected line in the diff: {line!r}")
+    return _safe_path(f"b/{path}")
+
+
 def diff_paths(diff: str) -> list[str]:
     """Files the diff writes, after checking that it holds nothing but plain unified hunks.
 
@@ -135,11 +145,19 @@ def diff_paths(diff: str) -> list[str]:
     """
     changed: set[str] = set()
     old = new = 0  # lines still expected in the current hunk
+    empty_file = False  # the previous line opened an empty-new-file block
     lines = diff.split("\n")  # not splitlines: form feed and the like are inside a line
     if lines[-1] == "":
         lines.pop()
     for line in lines:
-        if old > 0 or new > 0:
+        if empty_file:  # the one extension we accept: exactly `new file mode 100644`
+            if line != "new file mode 100644":
+                raise ApplyError(f"unexpected line in the diff: {line!r}")
+            empty_file = False
+        elif line.startswith("diff --git "):
+            changed.add(_empty_file_path(line))
+            empty_file = True
+        elif old > 0 or new > 0:
             if line.startswith("\\"):
                 continue
             marker = line[:1]
@@ -159,6 +177,8 @@ def diff_paths(diff: str) -> list[str]:
             new = int(match[2]) if match[2] is not None else 1
         elif not line.startswith("\\"):
             raise ApplyError(f"unexpected line in the diff: {line!r}")
+    if empty_file:
+        raise ApplyError("the diff ends inside an empty-file block")
     return sorted(changed)
 
 

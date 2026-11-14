@@ -86,12 +86,31 @@ def _lines(text: str) -> list[str]:
     return re.findall(r"[^\n]*\n|[^\n]+", text)
 
 
+def keep_final_newline(original: Path, files: dict[str, str]) -> dict[str, str]:
+    """Add the final newline the model dropped from a file that had one.
+
+    A small model often returns a whole file without its last newline, which would show up as a
+    change nobody asked for. Whether a file ends with a newline is not the model's decision, so
+    code restores it; an emptied file and a new file are left as written.
+    """
+    fixed = {}
+    for relative, content in files.items():
+        before = read_text(original, relative)
+        if before and before.endswith("\n") and content and not content.endswith("\n"):
+            content += "\n"
+        fixed[relative] = content
+    return fixed
+
+
 def make_diff(original: Path, changed: Path, paths: Iterable[str]) -> str:
     """Unified diff of `paths` between two trees; files that are identical are left out."""
     out: list[str] = []
     for relative in sorted(set(paths)):
         before, after = read_text(original, relative), read_text(changed, relative)
         if before == after or after is None:
+            continue
+        if before is None and after == "":  # a plain unified diff cannot say "new empty file"
+            out.append(f"diff --git a/{relative} b/{relative}\nnew file mode 100644\n")
             continue
         old_name = f"a/{relative}" if before is not None else "/dev/null"
         diff = difflib.unified_diff(

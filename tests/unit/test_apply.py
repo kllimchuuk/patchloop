@@ -271,3 +271,30 @@ def test_a_form_feed_in_a_file_does_not_break_the_diff(tmp_path):
     assert "No newline" not in diff
     apply_record(record_for(repo, diff))
     assert (repo / "m.py").read_text() == after["m.py"]
+
+
+def test_an_empty_new_file_is_created_next_to_the_changed_one(tmp_path):
+    before = {"a.py": "x = 1\n"}
+    after = {"a.py": "x = 2\n", "pkg/__init__.py": ""}
+    repo = make_repo(tmp_path / "p", before)
+    changed = apply_record(record_for(repo, diff_between(tmp_path, before, after)))
+    assert sorted(changed) == ["a.py", "pkg/__init__.py"]
+    assert (repo / "pkg/__init__.py").read_text() == ""
+    assert git(repo, "diff", "--cached", "--name-only") == ""
+
+
+@pytest.mark.parametrize(
+    "block",
+    [
+        "diff --git a/x b/x\nnew file mode 100755\n",
+        "diff --git a/x b/y\nnew file mode 100644\n",
+        "diff --git a/../x b/../x\nnew file mode 100644\n",
+        "diff --git a/x b/x\nindex 1..2\n",
+        "diff --git a/x b/x\n",
+        "new file mode 100644\n",
+    ],
+)
+def test_only_the_exact_empty_file_block_is_accepted(repo, block, monkeypatch):
+    monkeypatch.setattr(runs, "_git", lambda *a, **k: pytest.fail("git must not run"))
+    with pytest.raises(ApplyError):
+        apply_record(record_for(repo, block))
