@@ -63,6 +63,7 @@ class Config(_Section):
     build: str | None = None
     test: str | None = None
     lint: str | None = None
+    runs_dir: Path = Path("~/.patchloop/runs")  # run records until the database (step 7)
     env: dict[str, str] = {}  # only these variables reach the container, never the host's
 
 

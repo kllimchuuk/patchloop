@@ -31,7 +31,7 @@ from patchloop.patching import PatchError, apply_patch, make_diff, patch_hash, r
 from patchloop.profiles.base import LanguageProfile, ProjectSetup
 from patchloop.profiles.registry import detect_profile
 from patchloop.sandbox import ensure_image, make_workspace, remove_workspace
-from patchloop.schemas import Attempt, CheckResult, Failure, Patch, RunResult
+from patchloop.schemas import Attempt, CheckResult, Failure, GeneratedTest, Patch, RunResult
 
 StopReason = Literal["success", "iteration_limit", "stagnation", "timeout", "none"]
 Score = tuple[int, int, int]
@@ -63,8 +63,14 @@ class RunState(TypedDict, total=False):
     stop_reason: StopReason
     tester_mode: TesterMode
     repro_test: dict[str, str]  # path -> content of the accepted generated test (at most one)
+    generated_test: GeneratedTest  # the same test with its output on the original code
     route: str
     result: RunResult
+
+
+def _test_output(check: CheckResult) -> str:
+    lines = [f"{f.file or '?'}:{f.line or '?'} {f.message}" for f in check.failures]
+    return _clip("\n".join(lines))
 
 
 def all_failures(checks: list[CheckResult]) -> list[Failure]:
@@ -206,6 +212,9 @@ class Engine:
                 reliability = "normal" if mode == "issue" else "reduced"
                 return {
                     "repro_test": {path: content},
+                    "generated_test": GeneratedTest(
+                        path=path, content=content, output=_test_output(check)
+                    ),
                     "original": [*state["original"], check],
                     "reliability": reliability,
                     "route": "fix",
@@ -340,6 +349,7 @@ class Engine:
             explanation=explanation,
             stop_reason=stop_reason,
             reliability=state["reliability"],
+            generated_test=state.get("generated_test"),
         )
         return {"result": result}
 

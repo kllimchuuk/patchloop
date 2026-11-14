@@ -73,3 +73,17 @@ def test_profile_overrides_load_from_spec_example(tmp_path):
 def test_invalid_config_is_an_error(tmp_path, text):
     with pytest.raises(ConfigError):
         _load(tmp_path, text)
+
+
+def test_runs_dir_defaults_under_the_home_directory_and_expands_tilde(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    assert Config().runs_dir == Path("~/.patchloop/runs")
+    assert Config().runs_dir.expanduser() == tmp_path / ".patchloop" / "runs"
+
+
+def test_runs_dir_override(tmp_path):
+    from pathlib import Path
+
+    assert _load(tmp_path, "runs_dir: /data/runs\n").runs_dir == Path("/data/runs")

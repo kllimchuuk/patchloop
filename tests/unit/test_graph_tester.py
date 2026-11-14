@@ -290,3 +290,31 @@ def test_cleanup_of_the_generated_test_never_follows_a_link_out_of_the_workspace
     h.engine.test_file_fn = hostile
     h.engine.run(h.issue)
     assert (victim / "test_patchloop_generated.py").read_text() == "precious\n"
+
+
+def test_the_result_carries_the_accepted_test_and_its_output_on_the_original(tmp_path):
+    h = Harness(
+        tmp_path,
+        {"bug": checks(0), "ok": checks(0)},
+        issue="add() is wrong",
+        answers=[GOOD_TEST, "ok"],
+        test_file=repro_rules,
+    )
+    result = h.run()
+    test = result.generated_test
+    assert test is not None
+    assert (test.path, test.content) == (TEST_PATH, GOOD_TEST.content)
+    assert "assert -1 == 3" in test.output
+    assert TEST_PATH not in result.diff
+
+
+def test_a_run_without_a_reproducing_test_has_no_generated_test(tmp_path):
+    h = Harness(
+        tmp_path,
+        {"bug": checks(0), "ok": checks(0)},
+        Config(max_test_attempts=1),
+        issue="add() is wrong",
+        answers=[GOOD_TEST, "ok"],
+        test_file=lambda calc, test: repro_result(True),
+    )
+    assert h.run().generated_test is None
