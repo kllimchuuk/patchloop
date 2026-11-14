@@ -178,6 +178,8 @@ def test_the_final_newline_of_the_original_is_kept(tmp_path):
 
     root = write_files(tmp_path, {"a.py": "x\n", "b.py": "y", "e.py": "z\n"})
     files = {"a.py": "x = 1", "b.py": "y = 1", "e.py": "", "new.py": "n", "c.py": "c\n"}
+    crlf = write_files(tmp_path / "crlf", {"w.py": "a\r\nb\r\n"})
+    assert keep_final_newline(crlf, {"w.py": "a\r\nb"}) == {"w.py": "a\r\nb\r\n"}
     assert keep_final_newline(root, files) == {
         "a.py": "x = 1\n",  # the original ended with a newline, the model dropped it
         "b.py": "y = 1",  # the original had none: left as the model wrote it

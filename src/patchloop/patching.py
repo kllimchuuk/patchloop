@@ -97,7 +97,7 @@ def keep_final_newline(original: Path, files: dict[str, str]) -> dict[str, str]:
     for relative, content in files.items():
         before = read_text(original, relative)
         if before and before.endswith("\n") and content and not content.endswith("\n"):
-            content += "\n"
+            content += "\r\n" if before.endswith("\r\n") else "\n"
         fixed[relative] = content
     return fixed
 
@@ -105,12 +105,13 @@ def keep_final_newline(original: Path, files: dict[str, str]) -> dict[str, str]:
 def make_diff(original: Path, changed: Path, paths: Iterable[str]) -> str:
     """Unified diff of `paths` between two trees; files that are identical are left out."""
     out: list[str] = []
+    empty: list[str] = []  # git blocks go last: git reads a `---` line after one as its header
     for relative in sorted(set(paths)):
         before, after = read_text(original, relative), read_text(changed, relative)
         if before == after or after is None:
             continue
         if before is None and after == "":  # a plain unified diff cannot say "new empty file"
-            out.append(f"diff --git a/{relative} b/{relative}\nnew file mode 100644\n")
+            empty.append(f"diff --git a/{relative} b/{relative}\nnew file mode 100644\n")
             continue
         old_name = f"a/{relative}" if before is not None else "/dev/null"
         diff = difflib.unified_diff(
@@ -118,7 +119,7 @@ def make_diff(original: Path, changed: Path, paths: Iterable[str]) -> str:
         )
         for line in diff:
             out.append(line if line.endswith("\n") else line + "\n" + NO_NEWLINE)
-    return "".join(out)
+    return "".join(out + empty)
 
 
 def restore_files(original: Path, workdir: Path, paths: Iterable[str]) -> None:

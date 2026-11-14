@@ -298,3 +298,32 @@ def test_only_the_exact_empty_file_block_is_accepted(repo, block, monkeypatch):
     monkeypatch.setattr(runs, "_git", lambda *a, **k: pytest.fail("git must not run"))
     with pytest.raises(ApplyError):
         apply_record(record_for(repo, block))
+
+
+@pytest.mark.parametrize(
+    ("before", "after", "expected"),
+    [
+        # the empty file sorts before the edited one
+        ({"main.py": "x = 1\n"}, {"main.py": "x = 2\n", "app/__init__.py": ""},
+         ["app/__init__.py", "main.py"]),
+        # the empty file sorts before a new non-empty one
+        ({"keep.py": "k\n"}, {"app/__init__.py": "", "b.py": "y = 1\n"},
+         ["app/__init__.py", "b.py"]),
+    ],
+)
+def test_an_empty_file_never_swallows_the_next_file_header(tmp_path, before, after, expected):
+    repo = make_repo(tmp_path / "p", before)
+    changed = apply_record(record_for(repo, diff_between(tmp_path, before, after)))
+    assert changed == expected
+    for name, text in after.items():
+        assert (repo / name).read_text() == text
+
+
+def test_a_record_that_hides_a_file_behind_an_empty_block_is_refused(repo, monkeypatch):
+    crafted = (
+        "diff --git a/x b/x\nnew file mode 100644\n"
+        "--- /dev/null\n+++ b/y\n@@ -0,0 +1 @@\n+data\n"
+    )
+    monkeypatch.setattr(runs, "_git", lambda *a, **k: pytest.fail("git must not run"))
+    with pytest.raises(ApplyError, match="unexpected line"):
+        apply_record(record_for(repo, crafted))

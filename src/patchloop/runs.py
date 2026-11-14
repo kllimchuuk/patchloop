@@ -146,6 +146,7 @@ def diff_paths(diff: str) -> list[str]:
     changed: set[str] = set()
     old = new = 0  # lines still expected in the current hunk
     empty_file = False  # the previous line opened an empty-new-file block
+    blocks = False  # an empty-file block was seen: only more such blocks may follow
     lines = diff.split("\n")  # not splitlines: form feed and the like are inside a line
     if lines[-1] == "":
         lines.pop()
@@ -155,8 +156,12 @@ def diff_paths(diff: str) -> list[str]:
                 raise ApplyError(f"unexpected line in the diff: {line!r}")
             empty_file = False
         elif line.startswith("diff --git "):
+            if old > 0 or new > 0:
+                raise ApplyError(f"unexpected line in the diff: {line!r}")
             changed.add(_empty_file_path(line))
-            empty_file = True
+            empty_file = blocks = True
+        elif blocks:  # git would read a `---` line here as part of the block's header
+            raise ApplyError(f"unexpected line in the diff: {line!r}")
         elif old > 0 or new > 0:
             if line.startswith("\\"):
                 continue
