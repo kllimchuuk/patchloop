@@ -68,3 +68,20 @@ def test_a_test_plan_needs_content():
         TestPlan(content="  \n", explanation="e")
     with pytest.raises(ValidationError):
         TestPlan(content="x", explanation="e", path="tests/test_x.py")  # code picks the path
+
+
+def test_run_result_carries_an_optional_generated_test():
+    from patchloop.schemas import GeneratedTest
+
+    test = GeneratedTest(path="tests/test_x.py", content="def test_x(): ...\n", output="assert")
+    result = RunResult(status="fixed", generated_test=test)
+    assert RunResult.model_validate_json(result.model_dump_json()) == result
+    assert RunResult(status="fixed").generated_test is None
+    assert SCHEMA_VERSION == 2
+
+
+def test_generated_test_rejects_unknown_fields():
+    from patchloop.schemas import GeneratedTest
+
+    with pytest.raises(ValidationError):
+        GeneratedTest(path="a", content="b", output="c", extra="d")

@@ -1,6 +1,7 @@
 import os
 
 import pytest
+from support.projects import write_files
 
 from patchloop.patching import PatchError, apply_patch, make_diff, patch_hash, restore_files
 from patchloop.schemas import Patch
@@ -161,3 +162,28 @@ def test_a_file_where_a_directory_is_needed_is_a_patch_error(tmp_path):
     (tmp_path / "tests").write_text("i am a file\n", encoding="utf-8")
     with pytest.raises(PatchError, match="cannot write"):
         apply_patch(tmp_path, Patch(files={"tests/test_x.py": "x\n"}, explanation="e"))
+
+
+def test_an_empty_new_file_is_a_git_block_the_plain_diff_cannot_express(tmp_path):
+    from patchloop.patching import make_diff
+
+    old = write_files(tmp_path / "old", {"a.py": "x\n"})
+    new = write_files(tmp_path / "new", {"a.py": "x\n", "pkg/__init__.py": ""})
+    diff = make_diff(old, new, ["a.py", "pkg/__init__.py"])
+    assert diff == "diff --git a/pkg/__init__.py b/pkg/__init__.py\nnew file mode 100644\n"
+
+
+def test_the_final_newline_of_the_original_is_kept(tmp_path):
+    from patchloop.patching import keep_final_newline
+
+    root = write_files(tmp_path, {"a.py": "x\n", "b.py": "y", "e.py": "z\n"})
+    files = {"a.py": "x = 1", "b.py": "y = 1", "e.py": "", "new.py": "n", "c.py": "c\n"}
+    crlf = write_files(tmp_path / "crlf", {"w.py": "a\r\nb\r\n"})
+    assert keep_final_newline(crlf, {"w.py": "a\r\nb"}) == {"w.py": "a\r\nb\r\n"}
+    assert keep_final_newline(root, files) == {
+        "a.py": "x = 1\n",  # the original ended with a newline, the model dropped it
+        "b.py": "y = 1",  # the original had none: left as the model wrote it
+        "e.py": "",  # an emptied file stays empty
+        "new.py": "n",  # a new file has no original to follow
+        "c.py": "c\n",
+    }

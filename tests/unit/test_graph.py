@@ -216,3 +216,47 @@ def test_the_largest_attempt_limit_does_not_hit_the_graph_recursion_limit(tmp_pa
         "iteration_limit",
         9,
     )
+
+
+def test_on_step_reports_every_node_with_its_state_update_in_order(tmp_path):
+    h = Harness(tmp_path, {"bug": checks(2), "ok": checks(0)}, answers=["ok"])
+    events = []
+    h.engine.on_step = lambda node, update: events.append((node, update))
+    h.run()
+    assert [node for node, _ in events] == [
+        "prepare", "check_original", "fix", "apply", "check", "decide", "finish"
+    ]
+    updates = dict(events)
+    assert updates["check_original"]["original"][-1].failing_tests == 2
+    assert updates["check"]["attempts"][-1].index == 0
+    assert updates["finish"]["result"].status == "fixed"
+
+
+def test_on_step_sees_a_result_set_before_finish(tmp_path):
+    h = Harness(tmp_path, {"bug": checks(0)}, answers=[])
+    events = []
+    h.engine.on_step = lambda node, update: events.append(node)
+    assert h.run().status == "no_bugs_found"
+    assert events[-1] == "finish"
+
+
+def test_a_failing_callback_does_not_break_the_run(tmp_path):
+    def boom(node, update):
+        raise RuntimeError("terminal gone")
+
+    h = Harness(tmp_path, {"bug": checks(2), "ok": checks(0)}, answers=["ok"])
+    h.engine.on_step = boom
+    assert h.run().status == "fixed"
+
+
+def test_a_run_that_finds_nothing_carries_no_generated_test(tmp_path):
+    result = Harness(tmp_path, {"bug": checks(0)}, answers=[]).run()
+    assert (result.status, result.generated_test) == ("no_bugs_found", None)
+
+
+def test_a_patch_that_drops_the_final_newline_gets_it_back(tmp_path):
+    h = Harness(tmp_path, {"bug\n": checks(1), "ok\n": checks(0)}, answers=["ok"])
+    (h.project / SOURCE).write_text("bug\n", encoding="utf-8")
+    result = h.engine.run(None)
+    assert result.status == "fixed"
+    assert "+ok\n" in result.diff and "No newline" not in result.diff

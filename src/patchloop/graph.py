@@ -27,11 +27,18 @@ from patchloop.checks import run_checks, run_test_file
 from patchloop.config import Config
 from patchloop.context.files import has_tests
 from patchloop.llm.client import LLMClient
-from patchloop.patching import PatchError, apply_patch, make_diff, patch_hash, restore_files
+from patchloop.patching import (
+    PatchError,
+    apply_patch,
+    keep_final_newline,
+    make_diff,
+    patch_hash,
+    restore_files,
+)
 from patchloop.profiles.base import LanguageProfile, ProjectSetup
 from patchloop.profiles.registry import detect_profile
 from patchloop.sandbox import ensure_image, make_workspace, remove_workspace
-from patchloop.schemas import Attempt, CheckResult, Failure, Patch, RunResult
+from patchloop.schemas import Attempt, CheckResult, Failure, GeneratedTest, Patch, RunResult
 
 StopReason = Literal["success", "iteration_limit", "stagnation", "timeout", "none"]
 Score = tuple[int, int, int]
@@ -63,8 +70,14 @@ class RunState(TypedDict, total=False):
     stop_reason: StopReason
     tester_mode: TesterMode
     repro_test: dict[str, str]  # path -> content of the accepted generated test (at most one)
+    generated_test: GeneratedTest  # the same test with its output on the original code
     route: str
     result: RunResult
+
+
+def _test_output(check: CheckResult) -> str:
+    lines = [f"{f.file or '?'}:{f.line or '?'} {f.message}" for f in check.failures]
+    return _clip("\n".join(lines))
 
 
 def all_failures(checks: list[CheckResult]) -> list[Failure]:
@@ -104,6 +117,7 @@ class Engine:
     checks_fn: Callable[..., list[CheckResult]] = run_checks
     test_file_fn: Callable[..., CheckResult] = run_test_file
     image_fn: Callable[..., str] = ensure_image
+    on_step: Callable[[str, RunState], None] | None = None  # (node, its state update), live
     # set by run()/prepare
     base: Path = field(init=False)
     work: Path = field(init=False)
@@ -206,6 +220,9 @@ class Engine:
                 reliability = "normal" if mode == "issue" else "reduced"
                 return {
                     "repro_test": {path: content},
+                    "generated_test": GeneratedTest(
+                        path=path, content=content, output=_test_output(check)
+                    ),
                     "original": [*state["original"], check],
                     "reliability": reliability,
                     "route": "fix",
@@ -264,8 +281,11 @@ class Engine:
                 "new_patch": None,
                 "route": "decide",
             }
-        merged = {**best_files, **outcome.patch.files}
-        return {"new_patch": outcome.patch, "merged_files": merged, "route": "apply"}
+        patch = outcome.patch.model_copy(
+            update={"files": keep_final_newline(self.base, outcome.patch.files)}
+        )
+        merged = {**best_files, **patch.files}
+        return {"new_patch": patch, "merged_files": merged, "route": "apply"}
 
     def apply(self, state: RunState) -> RunState:
         patch = state["new_patch"]
@@ -340,6 +360,7 @@ class Engine:
             explanation=explanation,
             stop_reason=stop_reason,
             reliability=state["reliability"],
+            generated_test=state.get("generated_test"),
         )
         return {"result": result}
 
@@ -365,6 +386,15 @@ class Engine:
         graph.add_edge("finish", END)
         return graph.compile()
 
+    def _report(self, node: str, update: RunState) -> None:
+        """Tell the caller a node finished. A broken display must not throw away the run."""
+        if self.on_step is None:
+            return
+        try:
+            self.on_step(node, update)
+        except Exception:  # noqa: BLE001 - the callback is the caller's code, not ours
+            pass
+
     def run(self, issue: str | None = None) -> RunResult:
         """One run. The original project is only read; both copies are removed at the end."""
         copy_env = self.config.sandbox.copy_env
@@ -387,8 +417,13 @@ class Engine:
                 "repro_test": {},
             }
             limit = 12 + 4 * self.config.max_attempts  # four nodes per attempt
-            final = self.build().invoke(initial, {"recursion_limit": limit})
-            return final["result"]
+            state: RunState = dict(initial)  # type: ignore[assignment]
+            graph = self.build()
+            for chunk in graph.stream(initial, {"recursion_limit": limit}, stream_mode="updates"):
+                for node, update in chunk.items():
+                    state.update(update or {})
+                    self._report(node, update or {})
+            return state["result"]
         finally:
             remove_workspace(self.work)
             remove_workspace(self.base)

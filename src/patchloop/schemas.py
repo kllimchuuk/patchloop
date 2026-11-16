@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 class _Contract(BaseModel):
@@ -97,6 +97,14 @@ class Attempt(_Contract):
     review: Review | None = None
 
 
+class GeneratedTest(_Contract):
+    """The Tester's test as shown to the user; it is never part of the fix."""
+
+    path: str
+    content: str
+    output: str  # failure text of the test on the original code
+
+
 class RunResult(_Contract):
     """Final result of a run."""
 
@@ -109,3 +117,4 @@ class RunResult(_Contract):
         "success", "iteration_limit", "stagnation", "timeout", "none"
     ] = "none"
     reliability: Literal["normal", "reduced"] = "normal"  # reduced = no generated tests
+    generated_test: GeneratedTest | None = None  # shown by the CLI, not applied

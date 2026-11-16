@@ -63,6 +63,8 @@ class Config(_Section):
     build: str | None = None
     test: str | None = None
     lint: str | None = None
+    git_timeout_s: float = Field(30.0, gt=0)  # one git call in `patchloop apply`
+    runs_dir: Path = Path("~/.patchloop/runs")  # run records until the database (step 7)
     env: dict[str, str] = {}  # only these variables reach the container, never the host's
 
 

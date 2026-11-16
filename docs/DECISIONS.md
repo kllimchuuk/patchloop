@@ -116,3 +116,36 @@ Každý záznam: dátum, rozhodnutie, prečo, čo sa zmenilo. Rozhodnutia robí 
     - *Čo sa nepreberá z helpdesk-ai-drafts:* riadok `Co-Authored-By` v commitoch; dokumentácia ostáva po slovensky; zákaz komentárov v kóde sa nezavádza.
     - *Čo sa nemení:* SPEC, poradie krokov v §14, formát správy, pravidlo «len súbory, ktoré žiada prompt alebo SPEC».
     - *Zmenilo sa:* nový adresár `.claude/` (`settings.json`, `agents/`, `skills/`, `hooks/`), `tests/unit/test_claude_hooks.py`, `CLAUDE.md` (časti «How we work», «Commands», «Enforced by the harness»), `.gitignore`.
+
+## 14. 11. 2026 — krok 5: CLI naživo, záznam behu na disku, apply
+
+29. **Záznam behu žije do kroku 7 na disku, `apply` používa uložený diff a pridáva len opravu; `RunResult` nesie vygenerovaný test.** *Potvrdené autorom 12. 11. 2026, zapísané na začiatku kroku 5.*
+    - *Prečo:* databáza prichádza až v kroku 7, ale `patchloop apply <run_id>` (SPEC §10) potrebuje záznam, ktorý prežije koniec procesu. Súbor na disku je najmenší krok, ktorý nič neblokuje: krok 7 ho nahradí tabuľkou `runs`. Vygenerovaný test je pomocný nástroj Testera (rozhodnutie 27), nie súčasť opravy, preto ho `apply` do projektu nepridáva; CLI ho ale má ukázať, takže ho kontrakt musí niesť.
+    - *Čo sa zavádza:*
+        - záznam `<runs_dir>/<run_id>/record.json` (`RunResult`, cesta k projektu, popis chyby); kľúč konfigurácie `runs_dir`, predvolene `~/.patchloop/runs`;
+        - `patchloop apply <run_id>`: vetva `patchloop/<run_id>`, uložený diff cez `git apply`, vyžaduje git repozitár a čistý pracovný strom, nerobí commit ani push (SPEC §10);
+        - `apply` pridáva len opravu, nikdy vygenerovaný test;
+        - `RunResult` dostane voliteľné pole s vygenerovaným testom (cesta, obsah, výstup na pôvodnom kóde); `SCHEMA_VERSION` sa zvýši;
+        - príkazy `runs` a `report` ostávajú na krok 7.
+    - *Zmenilo sa:* `schemas.py`, `config.py`, `graph.py`, `cli.py`, nový modul záznamu behu a `apply`; SPEC §10 sa mení len v tom, čo sa fakticky zmení (cesta záznamu).
+
+30. **Krok 5: priebeh naživo cez `on_step`, tvar `run_id`, `apply` pre `partially_fixed`, konflikty a kódy skončenia `fix`.** *Navrhol Claude Code, potvrdené autorom 14. 11. 2026 (všetky odporúčané varianty).*
+    - *Priebeh naživo:* `Engine.run(..., on_step=callback)`; `invoke` sa nahradí `graph.stream(stream_mode="updates")` a callback dostane názov uzla a jeho zmenu stavu. Engine nepozná Rich, riadky vypisuje `cli.py`.
+    - *`run_id`:* `YYYYMMDD-HHMMSS-<4 hex>`; zoraďuje sa podľa času, hodí sa ako názov vetvy a priečinka. Formát sa overuje pri načítaní, takže `apply ../x` nevyjde z `runs_dir`.
+    - *`apply` pre `partially_fixed`:* povolené s varovaním («čiastočná oprava, N kontrol stále zlyháva»); odmietnuté len pri prázdnom diffe (`not_fixed`, `no_bugs_found`). Diff najlepšieho pokusu SPEC §8 ukazuje tak či tak, `apply` je len bezpečná vetva bez commitu.
+    - *Konflikty:* v zázname sa hash HEAD neuchováva. `apply` najprv spustí `git apply --check`; ak diff nesedí, príkaz skončí chybou a vetva sa nevytvorí.
+    - *Kódy skončenia `fix`:* 0 `fixed` alebo `no_bugs_found`, 1 `partially_fixed` alebo `not_fixed`, 2 chyba použitia alebo prostredia.
+    - *Zmenilo sa:* `graph.py` (`stream`, `on_step`), nový `runs.py`, `cli.py`.
+    - *Po review (2026-11-14):*
+        - Chybové hlásenia sa vypisujú ako text, nie ako značky Rich: odpoveď modelu alebo výstup gitu s hranatými zátvorkami (`[/INST]`) inak zhodí príkaz tracebackom a kódom 1, ktorý znamená `not_fixed`.
+        - Záznam, ktorého `run_id` nesedí s priečinkom, sa odmietne; `runs_dir` vo vnútri projektu sa odmietne pred behom (relatívna cesta by zapísala záznam do originálu); limit volania gitu je `git_timeout_s` v konfigurácii; názov `.git` sa v diffe porovnáva bez ohľadu na veľkosť písmen (macOS).
+        - `make_diff` a kontrola diffu `apply` delia text len podľa `\n`: `splitlines` rozdelil riadok s form feedom na dva a vymyslel chýbajúci posledný nový riadok.
+        - *Známe obmedzenie:* nový prázdny súbor (napr. `__init__.py`) obyčajný unifikovaný diff nevie vyjadriť, takže sa z diffu stráca a `apply` ho nevytvorí. Riešenie vyžaduje rozšírený diff git (`new file mode`), ktorý kontrola diffu zámerne odmieta; ide do «Potrebné rozhodnutie» v správe.
+
+31. **Nový prázdny súbor ide do diffu ako blok `diff --git` a kód vracia modelom zahodený posledný nový riadok.** *Navrhol Claude Code v správe 05, potvrdené autorom 14. 11. 2026 (obe odporúčané varianty).*
+    - *Prečo:* (a) obyčajný unifikovaný diff nevie vyjadriť nový prázdny súbor (napr. `__init__.py`), takže sa z diffu strácal a `apply` ho nevytvoril, hoci overená kópia ho mala. (b) Malý model vracia celý súbor často bez posledného nového riadka; v diffe to bola zmena, o ktorú nikto nežiadal. Či súbor končí novým riadkom, nemá rozhodovať model.
+    - *Čo sa zavádza:*
+        - `make_diff` pre prázdny nový súbor vydá `diff --git a/P b/P` + `new file mode 100644`; `diff_paths` (`apply`) povolí presne tento tvar (rovnaká cesta na oboch stranách, len režim 100644); iné rozšírenia gitu (premenovanie, iný režim, binárny patch) ostávajú odmietnuté;
+        - `keep_final_newline`: ak pôvodný súbor končil novým riadkom a súbor v odpovedi Programátora nie, kód ho pridá (pred hashom patchu a pred kontrolami, takže overený kód je ten istý ako v diffe); vyprázdnený a nový súbor sa nemenia.
+    - *Zmenilo sa:* `patching.py`, uzol `fix` v `graph.py`, `diff_paths` v `runs.py`. Prompt sa neladil.
+    - *Po treťom review (2026-11-15):* bloky pre prázdne súbory sa vydávajú až za všetky obyčajné hunky a `diff_paths` za prvým takým blokom povolí len ďalšie bloky `diff --git`. Git totiž číta riadok `---` za blokom ako súčasť jeho hlavičky: oprava s prázdnym `app/__init__.py` pred upraveným `main.py` by `git apply --check` odmietol, alebo by sa druhý súbor stratil a zoznam zmenených súborov by klamal. Koncový nový riadok sa vracia ako `\r\n`, ak pôvodný súbor končil `\r\n`.

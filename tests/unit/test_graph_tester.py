@@ -7,7 +7,7 @@ from support.fake_completion import ScriptedCompletion
 from test_graph import SOURCE, Harness, checks
 
 from patchloop.config import Config, LlmConfig
-from patchloop.llm.client import LiteLLMClient
+from patchloop.llm.client import FakeLLMClient, LiteLLMClient
 from patchloop.schemas import CheckResult, Failure, Patch, TestPlan
 
 TEST_PATH = "tests/test_patchloop_generated.py"
@@ -290,3 +290,49 @@ def test_cleanup_of_the_generated_test_never_follows_a_link_out_of_the_workspace
     h.engine.test_file_fn = hostile
     h.engine.run(h.issue)
     assert (victim / "test_patchloop_generated.py").read_text() == "precious\n"
+
+
+def test_the_result_carries_the_accepted_test_and_its_output_on_the_original(tmp_path):
+    h = Harness(
+        tmp_path,
+        {"bug": checks(0), "ok": checks(0)},
+        issue="add() is wrong",
+        answers=[GOOD_TEST, "ok"],
+        test_file=repro_rules,
+    )
+    result = h.run()
+    test = result.generated_test
+    assert test is not None
+    assert (test.path, test.content) == (TEST_PATH, GOOD_TEST.content)
+    assert "assert -1 == 3" in test.output
+    assert TEST_PATH not in result.diff
+
+
+def test_a_run_without_a_reproducing_test_has_no_generated_test(tmp_path):
+    h = Harness(
+        tmp_path,
+        {"bug": checks(0), "ok": checks(0)},
+        Config(max_test_attempts=1),
+        issue="add() is wrong",
+        answers=[GOOD_TEST, "ok"],
+        test_file=lambda calc, test: repro_result(True),
+    )
+    assert h.run().generated_test is None
+
+
+def test_the_tester_progress_line_tells_the_two_basic_mode_endings_apart(tmp_path):
+    from patchloop.cli import describe_step
+
+    def lines(llm, test_file):
+        h = Harness(tmp_path / str(id(llm)), {"bug": checks(0)}, Config(max_test_attempts=1),
+                    llm=llm, test_file=test_file, with_tests=False)
+        seen = []
+        h.engine.on_step = lambda node, update: seen.append(describe_step(node, update))
+        h.run()
+        return [line for line in seen if line and line.startswith("tester")]
+
+    garbage = LiteLLMClient(LlmConfig(), None, ScriptedCompletion(["not json"] * 4))
+    (unusable,) = lines(garbage, repro_rules)
+    assert "no usable test" in unusable and "pass" not in unusable
+    (passing,) = lines(FakeLLMClient([GOOD_TEST]), lambda calc, test: repro_result(True))
+    assert "pass" in passing

@@ -22,3 +22,11 @@ def test_check_exits_one_and_shows_the_hint_when_a_check_fails(monkeypatch):
     monkeypatch.setattr("patchloop.cli.run_checks", lambda cfg: items)
     result = runner.invoke(app, ["check"])
     assert result.exit_code == 1 and "start it" in result.output
+
+
+def test_check_prints_details_with_brackets_as_text(monkeypatch):
+    items = [CheckItem("Ollama", False, "reply [/INST] here", "try [red]this")]
+    monkeypatch.setattr("patchloop.cli.run_checks", lambda cfg: items)
+    result = runner.invoke(app, ["check"])
+    assert result.exit_code == 1
+    assert "[/INST]" in result.output and "[red]this" in result.output
